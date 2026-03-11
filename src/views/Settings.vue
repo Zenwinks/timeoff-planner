@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../supabase'
 import { useRouter } from 'vue-router'
 import { HOLIDAY_KEYS } from '../holidays'
@@ -22,6 +22,12 @@ const yearlyRtt = ref([])
 const newRttYear = ref(new Date().getFullYear())
 const newRttCount = ref(9)
 
+const newRttYearError = computed(() => {
+  if (newRttYear.value < form.value.start_year) return `L'année doit être ≥ ${form.value.start_year}`
+  if (yearlyRtt.value.find(r => r.year === newRttYear.value)) return 'Cette année est déjà configurée'
+  return null
+})
+
 onMounted(async () => {
   const { data: { user } } = await supabase.auth.getUser()
   userId.value = user.id
@@ -40,6 +46,7 @@ onMounted(async () => {
       conges_increment_per_month: data.conges_increment_per_month,
       journee_solidarite: data.journee_solidarite || null,
     }
+    newRttYear.value = data.start_year
   } else {
     isNew.value = true
   }
@@ -52,12 +59,15 @@ onMounted(async () => {
 
   yearlyRtt.value = rttData || []
 
+  if (rttData && rttData.length > 0) {
+    newRttYear.value = rttData[rttData.length - 1].year + 1
+  }
+
   loading.value = false
 })
 
 async function addRttYear() {
-  const exists = yearlyRtt.value.find(r => r.year === newRttYear.value)
-  if (exists) return
+  if (newRttYearError.value) return
 
   const { data, error } = await supabase
     .from('yearly_rtt')
@@ -123,10 +133,12 @@ async function save() {
           <div class="form-group">
             <label>Congés initiaux</label>
             <input type="number" v-model.number="form.initial_conges" step="0.01" min="0" />
+            <small class="hint">Solde CP reporté depuis l'année N-1</small>
           </div>
           <div class="form-group">
             <label>RTT initiaux</label>
             <input type="number" v-model.number="form.initial_rtt" step="0.01" min="0" />
+            <small class="hint">Solde RTT reporté depuis l'année N-1 (décimales uniquement)</small>
           </div>
         </div>
 
@@ -164,10 +176,11 @@ async function save() {
           <div v-if="yearlyRtt.length === 0" class="rtt-empty">Aucune année configurée</div>
         </div>
         <div class="rtt-add">
-          <input type="number" v-model.number="newRttYear" class="rtt-year-input" />
+          <input type="number" v-model.number="newRttYear" :min="form.start_year" class="rtt-year-input" :class="{ 'input-error': newRttYearError }" />
           <input type="number" v-model.number="newRttCount" step="0.01" min="0" class="rtt-input" />
-          <button type="button" class="btn-add" @click="addRttYear">+ Ajouter</button>
+          <button type="button" class="btn-add" @click="addRttYear" :disabled="!!newRttYearError">+ Ajouter</button>
         </div>
+        <p v-if="newRttYearError" class="rtt-year-error">{{ newRttYearError }}</p>
 
         <div class="form-actions">
           <router-link to="/" class="btn-cancel" v-if="!isNew">Annuler</router-link>
@@ -287,6 +300,21 @@ input:focus, select:focus {
   color: #666;
   font-size: 0.85rem;
   font-style: italic;
+}
+
+.input-error {
+  border-color: #e74c3c !important;
+}
+
+.rtt-year-error {
+  color: #e74c3c;
+  font-size: 0.8rem;
+  margin: -0.25rem 0 0.75rem;
+}
+
+.btn-add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .rtt-add {
