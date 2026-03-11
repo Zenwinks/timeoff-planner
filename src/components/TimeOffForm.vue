@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import VueDatePicker from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { isHolidayDate } from '../holidays'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
+  editingGroup: { type: Object, default: null },
+  checkBalance: { type: Function, default: null },
 })
 
 const emit = defineEmits(['submit', 'update:modelValue'])
@@ -17,6 +19,10 @@ const formDuration = ref(1)
 const formSaving = ref(false)
 const showWarning = ref(false)
 const warningMessages = ref([])
+const hasBlockingWarning = ref(false)
+const forceConfirm = ref(false)
+
+const isEditing = computed(() => !!props.editingGroup)
 
 const isSingleDay = computed(() => {
   if (!formDateRange.value) return false
@@ -33,17 +39,56 @@ function disabledDates(date) {
   return day === 0 || day === 6 || isHolidayDate(date)
 }
 
+watch([formDateRange, formType, formDuration, formStatus], () => {
+  forceConfirm.value = false
+  if (!props.checkBalance || !formDateRange.value) {
+    showWarning.value = false
+    warningMessages.value = []
+    hasBlockingWarning.value = false
+    return
+  }
+  const { messages, blocking } = props.checkBalance(
+    formDateRange.value,
+    formType.value,
+    Number(formDuration.value),
+    formStatus.value,
+  )
+  warningMessages.value = messages
+  hasBlockingWarning.value = blocking
+  showWarning.value = messages.length > 0
+})
+
 function onSubmit() {
   emit('submit', {
     dateRange: formDateRange.value,
     type: formType.value,
     status: formStatus.value,
     duration: Number(formDuration.value),
+    editingGroup: props.editingGroup,
+    forceConfirm: forceConfirm.value,
   })
 }
 
-function setWarnings(warnings) {
+function confirmWarning() {
+  forceConfirm.value = true
+  onSubmit()
+}
+
+function loadGroup(group) {
+  formDateRange.value = [
+    new Date(group.startDate + 'T00:00'),
+    new Date(group.endDate + 'T00:00'),
+  ]
+  formType.value = group.type
+  formStatus.value = group.status
+  formDuration.value = group.duration
+  showWarning.value = false
+  warningMessages.value = []
+}
+
+function setWarnings(warnings, blocking = false) {
   warningMessages.value = warnings
+  hasBlockingWarning.value = blocking
   showWarning.value = true
 }
 
@@ -63,17 +108,19 @@ function reset() {
   formDuration.value = 1
   showWarning.value = false
   warningMessages.value = []
+  hasBlockingWarning.value = false
+  forceConfirm.value = false
   formSaving.value = false
   emit('update:modelValue', false)
 }
 
-defineExpose({ setWarnings, cancelWarning, setSaving, reset })
+defineExpose({ setWarnings, cancelWarning, setSaving, reset, loadGroup })
 </script>
 
 <template>
   <Transition name="slide-form">
     <div class="form-card" v-if="modelValue">
-      <h3>Poser un congé</h3>
+      <h3>{{ isEditing ? 'Modifier un congé' : 'Poser un congé' }}</h3>
       <div class="form-row">
         <div class="form-group date-picker-group">
           <label>Période</label>
@@ -117,16 +164,16 @@ defineExpose({ setWarnings, cancelWarning, setSaving, reset })
       </div>
 
       <Transition name="fade">
-        <div class="warning-banner" v-if="showWarning">
+        <div class="warning-banner" :class="{ blocking: hasBlockingWarning }" v-if="showWarning">
           <div class="warning-icon">!</div>
           <div class="warning-content">
-            <strong>Solde négatif détecté</strong>
+            <strong>{{ hasBlockingWarning ? 'Impossible de valider' : 'Solde négatif détecté' }}</strong>
             <ul>
               <li v-for="(msg, i) in warningMessages" :key="i">{{ msg }}</li>
             </ul>
             <div class="warning-actions">
-              <button class="btn-warning-confirm" @click="onSubmit">Confirmer quand même</button>
-              <button class="btn-warning-cancel" @click="cancelWarning">Annuler</button>
+              <button v-if="!hasBlockingWarning" class="btn-warning-confirm" @click="confirmWarning">Confirmer quand même</button>
+              <button class="btn-warning-cancel" @click="cancelWarning">{{ hasBlockingWarning ? 'OK' : 'Annuler' }}</button>
             </div>
           </div>
         </div>
@@ -218,6 +265,11 @@ defineExpose({ setWarnings, cancelWarning, setSaving, reset })
 .warning-content {
   flex: 1;
   font-size: 0.8rem;
+}
+
+.warning-banner.blocking {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: rgba(231, 76, 60, 0.6);
 }
 
 .warning-content strong {

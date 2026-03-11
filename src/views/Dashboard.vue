@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { supabase } from '../supabase'
 import { useRouter } from 'vue-router'
 import { setSolidarite } from '../holidays'
@@ -17,6 +17,7 @@ const loading = ref(true)
 
 const showForm = ref(false)
 const formRef = ref(null)
+const editingGroup = ref(null)
 
 // Legend hover filter
 const hoveredStatus = ref(null)
@@ -58,17 +59,25 @@ async function loadData() {
   loading.value = false
 }
 
-async function onFormSubmit({ dateRange, type, status, duration }) {
+async function onFormSubmit({ dateRange, type, status, duration, editingGroup: group, forceConfirm }) {
   if (!dateRange) return
 
-  // Check negative balance warning (first call shows warning)
-  const warnings = checkNegativeBalance(dateRange, type, duration, status)
-  if (warnings.length > 0 && formRef.value) {
-    formRef.value.setWarnings(warnings)
-    return
+  if (!forceConfirm) {
+    const { messages, blocking } = checkNegativeBalance(dateRange, type, duration, status)
+    if (messages.length > 0 && formRef.value) {
+      formRef.value.setWarnings(messages, blocking)
+      return
+    }
   }
 
   formRef.value?.setSaving(true)
+
+  // If editing, delete the old entries first
+  if (group) {
+    const ids = group.entries.map(e => e.id)
+    await supabase.from('time_off_entries').delete().in('id', ids)
+    allEntries.value = allEntries.value.filter(e => !ids.includes(e.id))
+  }
 
   const range = dateRange
   const startDate = Array.isArray(range) ? range[0] : range
@@ -96,8 +105,15 @@ async function onFormSubmit({ dateRange, type, status, duration }) {
     allEntries.value = entriesData || []
   }
 
+  editingGroup.value = null
   formRef.value?.reset()
   showForm.value = false
+}
+
+function onEditGroup(group) {
+  editingGroup.value = group
+  showForm.value = true
+  nextTick(() => formRef.value?.loadGroup(group))
 }
 
 async function deleteGroup(group) {
@@ -127,7 +143,7 @@ onMounted(() => {
         <h1>TimeOff Planner</h1>
       </div>
       <div class="header-right">
-        <button class="btn-add" @click="showForm = !showForm">
+        <button class="btn-add" @click="() => { if (showForm) { showForm = false; editingGroup = null } else { showForm = true } }">
           {{ showForm ? 'Fermer' : '+ Poser un congé' }}
         </button>
         <router-link to="/settings" class="settings-link">Paramètres</router-link>
@@ -138,6 +154,8 @@ onMounted(() => {
     <TimeOffForm
       ref="formRef"
       v-model="showForm"
+      :editing-group="editingGroup"
+      :check-balance="checkNegativeBalance"
       @submit="onFormSubmit"
     />
 
@@ -162,23 +180,34 @@ onMounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in monthlyRecap" :key="row.label" :class="{ current: row.isCurrent }">
-            <td class="month-label">{{ row.label }}</td>
-            <td class="num" :class="{ negative: row.total < 0 }">{{ row.total }}</td>
-            <td class="num cp" :class="{ negative: row.cp < 0 }">{{ row.cp }}</td>
-            <td class="num used">{{ row.cpUsed || '' }}</td>
-            <td class="num rtt" :class="{ negative: row.rtt < 0 }">{{ row.rtt }}</td>
-            <td class="num used">{{ row.rttUsed || '' }}</td>
-            <td class="detail">
-              <EntryChip
-                v-for="(group, gi) in row.groups"
-                :key="gi"
-                :group="group"
-                :dimmed="!!hoveredStatus && hoveredStatus !== group.status"
-                @delete="deleteGroup"
-              />
-            </td>
-          </tr>
+          <template v-for="row in monthlyRecap" :key="row.label">
+            <tr :class="{ current: row.isCurrent }">
+              <td class="month-label">{{ row.label }}</td>
+              <td class="num" :class="{ negative: row.total < 0 }">{{ row.total }}</td>
+              <td class="num cp" :class="{ negative: row.cp < 0 }">{{ row.cp }}</td>
+              <td class="num used">{{ row.cpUsed || '' }}</td>
+              <td class="num rtt" :class="{ negative: row.rtt < 0 }">
+                {{ row.rtt }}
+                <span v-if="row.rttDecemberWarning" class="rtt-warn">⚠</span>
+              </td>
+              <td class="num used">{{ row.rttUsed || '' }}</td>
+              <td class="detail">
+                <EntryChip
+                  v-for="(group, gi) in row.groups"
+                  :key="gi"
+                  :group="group"
+                  :dimmed="!!hoveredStatus && hoveredStatus !== group.status"
+                  @delete="deleteGroup"
+                  @edit="onEditGroup"
+                />
+              </td>
+            </tr>
+            <tr v-if="row.rttDecemberWarning" class="rtt-warn-row">
+              <td colspan="7" class="rtt-warn-cell">
+                ⚠ Il vous reste {{ row.rtt }} RTT — pensez à les poser avant le 31 décembre. Seules les décimales seront reportées en janvier.
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -337,6 +366,23 @@ header h1 {
 
 .num.rtt {
   color: #f0c078;
+}
+
+.rtt-warn {
+  font-size: 0.7rem;
+  color: #f0c078;
+  margin-left: 0.2rem;
+}
+
+.rtt-warn-row td {
+  border-bottom: 1px solid #1a1a30;
+}
+
+.rtt-warn-cell {
+  padding: 0.3rem 0.5rem 0.5rem;
+  font-size: 0.75rem;
+  color: #f0c078;
+  background: rgba(240, 192, 120, 0.06);
 }
 
 .num.used {

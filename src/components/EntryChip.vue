@@ -4,7 +4,7 @@ defineProps({
   dimmed: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['delete', 'edit'])
 </script>
 
 <template>
@@ -21,6 +21,7 @@ const emit = defineEmits(['delete'])
       </span>
       <span v-if="group.duration === 0.5" class="chip-half">½j</span>
     </span>
+    <button class="chip-edit" @click="emit('edit', group)">✎</button>
     <button class="chip-delete" @click="emit('delete', group)">&times;</button>
   </div>
 </template>
@@ -66,6 +67,8 @@ const emit = defineEmits(['delete'])
 }
 
 .chip-dates {
+  display: inline-flex;
+  align-items: center;
   padding: 0.2rem 0.35rem;
   color: #eee;
 }
@@ -97,6 +100,21 @@ const emit = defineEmits(['delete'])
   background: rgba(255, 255, 255, 0.08);
   color: #aaa;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chip-edit {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0 3px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.chip-edit:hover {
+  color: #646cff;
 }
 
 .chip-delete {
