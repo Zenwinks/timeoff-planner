@@ -85,6 +85,9 @@ function computeBalances(settings, yearlyRtt, entries) {
     cpBalance += cpIncrement
 
     if (month === 0) {
+      // Transition décembre → janvier : ne reporter que les décimales, pas le négatif
+      rttBalance = rttBalance >= 0 ? rttBalance % 1 : 0
+
       const rttForYear = yearlyRtt.find(r => Number(r.year) === year)
       if (rttForYear) {
         rttBalance += Number(rttForYear.rtt_count) || 0
@@ -99,7 +102,8 @@ function computeBalances(settings, yearlyRtt, entries) {
     cpBalance -= cpUsed
     rttBalance -= rttUsed
 
-    rows.push({ year, month, cpBalance, rttBalance, cpUsed, rttUsed, monthEntries })
+    const rttDecemberWarning = month === 11 && rttBalance >= 1
+    rows.push({ year, month, cpBalance, rttBalance, cpUsed, rttUsed, monthEntries, rttDecemberWarning })
   }
 
   return rows
@@ -127,12 +131,13 @@ export function useBalance(settings, yearlyRtt, allEntries) {
         rttUsed: row.rttUsed,
         isCurrent,
         groups: entryGroups,
+        rttDecemberWarning: row.rttDecemberWarning,
       }
     })
   })
 
   function checkNegativeBalance(formDateRange, formType, formDuration, formStatus) {
-    if (!formDateRange || !settings.value) return []
+    if (!formDateRange || !settings.value) return { messages: [], blocking: false }
 
     const range = formDateRange
     const startDate = Array.isArray(range) ? range[0] : range
@@ -143,7 +148,7 @@ export function useBalance(settings, yearlyRtt, allEntries) {
 
     const existingDates = new Set(allEntries.value.map(e => e.date))
     const newDays = workingDays.filter(d => !existingDates.has(d))
-    if (newDays.length === 0) return []
+    if (newDays.length === 0) return { messages: ['Toutes les dates sélectionnées sont déjà occupées.'], blocking: true }
 
     const simEntries = [
       ...allEntries.value,
@@ -153,13 +158,20 @@ export function useBalance(settings, yearlyRtt, allEntries) {
     const balances = computeBalances(settings.value, yearlyRtt.value, simEntries)
     const warnings = []
 
+    let blocking = false
+
     for (const row of balances) {
       const label = `${monthNames[row.month]} ${row.year}`
       if (row.cpBalance < 0) warnings.push(`CP en négatif sur ${label} (${Math.round(row.cpBalance * 100) / 100})`)
-      if (row.rttBalance < 0) warnings.push(`RTT en négatif sur ${label} (${Math.round(row.rttBalance * 100) / 100})`)
+      if (row.rttBalance <= -1) {
+        warnings.push(`RTT : solde ne peut pas descendre en dessous de -1 sur ${label} (${Math.round(row.rttBalance * 100) / 100})`)
+        blocking = true
+      } else if (row.rttBalance < 0) {
+        warnings.push(`RTT en négatif sur ${label} (${Math.round(row.rttBalance * 100) / 100})`)
+      }
     }
 
-    return warnings
+    return { messages: warnings, blocking }
   }
 
   return { monthlyRecap, checkNegativeBalance }
