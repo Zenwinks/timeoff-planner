@@ -63,7 +63,7 @@ async function onFormSubmit({ dateRange, type, status, duration, editingGroup: g
   if (!dateRange) return
 
   if (!forceConfirm) {
-    const { messages, blocking } = checkNegativeBalance(dateRange, type, duration, status)
+    const { messages, blocking } = checkNegativeBalance(dateRange, type, duration, status, group?.entries || [])
     if (messages.length > 0 && formRef.value) {
       formRef.value.setWarnings(messages, blocking)
       return

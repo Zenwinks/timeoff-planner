@@ -52,6 +52,7 @@ watch([formDateRange, formType, formDuration, formStatus], () => {
     formType.value,
     Number(formDuration.value),
     formStatus.value,
+    props.editingGroup?.entries || [],
   )
   warningMessages.value = messages
   hasBlockingWarning.value = blocking

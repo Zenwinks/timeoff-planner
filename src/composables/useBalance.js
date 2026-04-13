@@ -43,7 +43,7 @@ export function groupEntries(monthEntries) {
   let currentGroup = null
 
   for (const entry of sorted) {
-    if (currentGroup && entry.type === currentGroup.type && entry.status === currentGroup.status && entry.duration === currentGroup.duration && isNextWorkingDay(currentGroup.endDate, entry.date)) {
+    if (currentGroup && entry.type === currentGroup.type && entry.status === currentGroup.status && entry.duration === currentGroup.duration && isNextWorkingDay(currentGroup.endDate, entry.date) && entry.duration !== 0.5) {
       currentGroup.entries.push(entry)
       currentGroup.endDate = entry.date
       currentGroup.endDay = new Date(entry.date + 'T00:00').getDate()
@@ -136,7 +136,7 @@ export function useBalance(settings, yearlyRtt, allEntries) {
     })
   })
 
-  function checkNegativeBalance(formDateRange, formType, formDuration, formStatus) {
+  function checkNegativeBalance(formDateRange, formType, formDuration, formStatus, excludeEntries = []) {
     if (!formDateRange || !settings.value) return { messages: [], blocking: false }
 
     const range = formDateRange
@@ -146,12 +146,14 @@ export function useBalance(settings, yearlyRtt, allEntries) {
     const duration = Number(formDuration)
     const type = formType
 
-    const existingDates = new Set(allEntries.value.map(e => e.date))
+    const excludeIds = new Set(excludeEntries.map(e => e.id))
+    const filteredEntries = allEntries.value.filter(e => !excludeIds.has(e.id))
+    const existingDates = new Set(filteredEntries.map(e => e.date))
     const newDays = workingDays.filter(d => !existingDates.has(d))
     if (newDays.length === 0) return { messages: ['Toutes les dates sélectionnées sont déjà occupées.'], blocking: true }
 
     const simEntries = [
-      ...allEntries.value,
+      ...filteredEntries,
       ...newDays.map(date => ({ date, type, duration, status: formStatus })),
     ]
 
