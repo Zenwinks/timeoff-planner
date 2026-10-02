@@ -3,20 +3,29 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "vite",
+    "dev:server": "node --watch --env-file-if-exists=.env server/index.js",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/index.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "backup:supabase": "node scripts/backup-supabase.mjs",
+    "migrate:supabase": "node scripts/migrate-from-supabase.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.99.0",
-    "@vuepic/vue-datepicker": "^11.0.3",
-    "vue": "^3.5.25",
-    "vue-router": "^4.6.4"
+    "better-sqlite3": "^13.0.3",
+    "openid-client": "^6.8.8"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.2",
+    "@vuepic/vue-datepicker": "^11.0.3",
     "vite": "^7.3.1",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "vue": "^3.5.25",
+    "vue-router": "^4.6.4"
   }
 }

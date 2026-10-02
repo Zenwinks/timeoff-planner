@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
-import { supabase } from '../supabase'
+import { api } from '../api'
 import { useRouter } from 'vue-router'
 import { setSolidarite } from '../holidays'
 import { useBalance, getWorkingDaysInRange } from '../composables/useBalance'
@@ -9,7 +9,6 @@ import EntryChip from '../components/EntryChip.vue'
 import TimeOffForm from '../components/TimeOffForm.vue'
 
 const router = useRouter()
-const user = ref(null)
 const settings = ref(null)
 const yearlyRtt = ref([])
 const allEntries = ref([])
@@ -28,14 +27,7 @@ const { monthlyRecap, checkNegativeBalance } = useBalance(settings, yearlyRtt, a
 async function loadData() {
   loading.value = true
 
-  const { data: { user: u } } = await supabase.auth.getUser()
-  user.value = u
-
-  const { data: s } = await supabase
-    .from('user_settings')
-    .select('*')
-    .eq('user_id', u.id)
-    .single()
+  const s = await api.getSettings()
   settings.value = s
   setSolidarite(s?.journee_solidarite)
 
@@ -44,17 +36,9 @@ async function loadData() {
     return
   }
 
-  const { data: rttData } = await supabase
-    .from('yearly_rtt')
-    .select('*')
-    .eq('user_id', u.id)
-  yearlyRtt.value = rttData || []
-
-  const { data: entriesData } = await supabase
-    .from('time_off_entries')
-    .select('*')
-    .eq('user_id', u.id)
-  allEntries.value = entriesData || []
+  const [rttData, entriesData] = await Promise.all([api.listYearlyRtt(), api.listEntries()])
+  yearlyRtt.value = rttData
+  allEntries.value = entriesData
 
   loading.value = false
 }
@@ -72,37 +56,31 @@ async function onFormSubmit({ dateRange, type, status, duration, editingGroup: g
 
   formRef.value?.setSaving(true)
 
-  // If editing, delete the old entries first
-  if (group) {
-    const ids = group.entries.map(e => e.id)
-    await supabase.from('time_off_entries').delete().in('id', ids)
-    allEntries.value = allEntries.value.filter(e => !ids.includes(e.id))
-  }
+  try {
+    // If editing, delete the old entries first
+    if (group) {
+      const ids = group.entries.map(e => e.id)
+      await api.deleteEntries(ids)
+      allEntries.value = allEntries.value.filter(e => !ids.includes(e.id))
+    }
 
-  const range = dateRange
-  const startDate = Array.isArray(range) ? range[0] : range
-  const endDate = Array.isArray(range) ? range[1] : range
-  const workingDays = getWorkingDaysInRange(startDate, endDate)
+    const range = dateRange
+    const startDate = Array.isArray(range) ? range[0] : range
+    const endDate = Array.isArray(range) ? range[1] : range
+    const workingDays = getWorkingDaysInRange(startDate, endDate)
 
-  const existingDates = new Set(allEntries.value.map(e => e.date))
-  const newDays = workingDays.filter(d => !existingDates.has(d))
+    const existingDates = new Set(allEntries.value.map(e => e.date))
+    const newDays = workingDays.filter(d => !existingDates.has(d))
 
-  if (newDays.length > 0) {
-    const rows = newDays.map(date => ({
-      user_id: user.value.id,
-      date,
-      type,
-      status,
-      duration,
-    }))
-
-    await supabase.from('time_off_entries').insert(rows)
-
-    const { data: entriesData } = await supabase
-      .from('time_off_entries')
-      .select('*')
-      .eq('user_id', user.value.id)
-    allEntries.value = entriesData || []
+    if (newDays.length > 0) {
+      await api.addEntries(newDays.map(date => ({ date, type, status, duration })))
+      allEntries.value = await api.listEntries()
+    }
+  } catch (error) {
+    formRef.value?.setSaving(false)
+    formRef.value?.setWarnings([`Enregistrement impossible : ${error.message}`], true)
+    allEntries.value = await api.listEntries().catch(() => allEntries.value)
+    return
   }
 
   editingGroup.value = null
@@ -118,15 +96,12 @@ function onEditGroup(group) {
 
 async function deleteGroup(group) {
   const ids = group.entries.map(e => e.id)
-  await supabase
-    .from('time_off_entries')
-    .delete()
-    .in('id', ids)
+  await api.deleteEntries(ids)
   allEntries.value = allEntries.value.filter(e => !ids.includes(e.id))
 }
 
 async function logout() {
-  await supabase.auth.signOut()
+  await api.logout()
   router.push('/login')
 }
 

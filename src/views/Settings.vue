@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { supabase } from '../supabase'
+import { api, getCurrentUser } from '../api'
 import { useRouter } from 'vue-router'
 import { HOLIDAY_KEYS } from '../holidays'
 
@@ -8,7 +8,10 @@ const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
 const isNew = ref(false)
-const userId = ref(null)
+const userEmail = ref('')
+const confirmingDelete = ref(false)
+const deleting = ref(false)
+const deleteError = ref(null)
 
 const form = ref({
   start_year: new Date().getFullYear(),
@@ -29,14 +32,10 @@ const newRttYearError = computed(() => {
 })
 
 onMounted(async () => {
-  const { data: { user } } = await supabase.auth.getUser()
-  userId.value = user.id
+  const user = await getCurrentUser()
+  userEmail.value = user?.email ?? ''
 
-  const { data } = await supabase
-    .from('user_settings')
-    .select('*')
-    .eq('user_id', user.id)
-    .single()
+  const data = await api.getSettings()
 
   if (data) {
     form.value = {
@@ -51,15 +50,11 @@ onMounted(async () => {
     isNew.value = true
   }
 
-  const { data: rttData } = await supabase
-    .from('yearly_rtt')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('year')
+  const rttData = await api.listYearlyRtt()
 
-  yearlyRtt.value = rttData || []
+  yearlyRtt.value = rttData
 
-  if (rttData && rttData.length > 0) {
+  if (rttData.length > 0) {
     newRttYear.value = rttData[rttData.length - 1].year + 1
   }
 
@@ -69,11 +64,7 @@ onMounted(async () => {
 async function addRttYear() {
   if (newRttYearError.value) return
 
-  const { data, error } = await supabase
-    .from('yearly_rtt')
-    .insert({ user_id: userId.value, year: newRttYear.value, rtt_count: newRttCount.value })
-    .select()
-    .single()
+  const data = await api.addYearlyRtt({ year: newRttYear.value, rtt_count: newRttCount.value })
 
   if (data) {
     yearlyRtt.value.push(data)
@@ -83,36 +74,34 @@ async function addRttYear() {
 }
 
 async function updateRttYear(item) {
-  await supabase
-    .from('yearly_rtt')
-    .update({ rtt_count: item.rtt_count })
-    .eq('id', item.id)
+  await api.updateYearlyRtt(item.id, { rtt_count: item.rtt_count })
 }
 
 async function removeRttYear(item) {
-  await supabase
-    .from('yearly_rtt')
-    .delete()
-    .eq('id', item.id)
+  await api.deleteYearlyRtt(item.id)
   yearlyRtt.value = yearlyRtt.value.filter(r => r.id !== item.id)
 }
 
 async function save() {
   saving.value = true
 
-  if (isNew.value) {
-    await supabase
-      .from('user_settings')
-      .insert({ user_id: userId.value, ...form.value })
-  } else {
-    await supabase
-      .from('user_settings')
-      .update(form.value)
-      .eq('user_id', userId.value)
-  }
+  // Le serveur crée les paramètres s'ils n'existent pas encore, sinon les remplace.
+  await api.saveSettings(form.value)
 
   saving.value = false
   router.push('/')
+}
+
+async function deleteAccount() {
+  deleting.value = true
+  deleteError.value = null
+  try {
+    await api.deleteAccount()
+    router.push('/login')
+  } catch (error) {
+    deleteError.value = `Suppression impossible : ${error.message}`
+    deleting.value = false
+  }
 }
 </script>
 
@@ -189,6 +178,29 @@ async function save() {
           </button>
         </div>
       </form>
+
+      <div class="account">
+        <div class="section-title">Mon compte</div>
+        <p class="account-email" v-if="userEmail">Connecté avec {{ userEmail }}</p>
+        <router-link to="/confidentialite" class="account-link">Vos données personnelles</router-link>
+
+        <button v-if="!confirmingDelete" type="button" class="btn-delete-account" @click="confirmingDelete = true">
+          Supprimer mon compte
+        </button>
+        <div v-else class="delete-confirm">
+          <p>
+            Votre compte, vos paramètres et tous vos congés et RTT seront effacés définitivement.
+            Ce n'est pas réversible.
+          </p>
+          <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
+          <div class="delete-actions">
+            <button type="button" class="btn-cancel" @click="confirmingDelete = false" :disabled="deleting">Annuler</button>
+            <button type="button" class="btn-delete-confirm" @click="deleteAccount" :disabled="deleting">
+              {{ deleting ? 'Suppression...' : 'Supprimer définitivement' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div v-else class="loading">Chargement...</div>
@@ -401,6 +413,82 @@ input:focus, select:focus {
   align-items: center;
   min-height: 100vh;
   color: #888;
+}
+
+.account {
+  margin-top: 2rem;
+}
+
+.account-email {
+  color: #aaa;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.account-link {
+  display: inline-block;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.btn-delete-account {
+  display: block;
+  padding: 0.5rem 1rem;
+  border: 1px solid #e74c3c;
+  border-radius: 6px;
+  background: transparent;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.btn-delete-account:hover {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.delete-confirm {
+  border: 1px solid #e74c3c;
+  border-radius: 8px;
+  padding: 1rem;
+  background: rgba(231, 76, 60, 0.08);
+  font-size: 0.85rem;
+  color: #ddd;
+}
+
+.delete-error {
+  color: #e74c3c;
+  margin-top: 0.5rem;
+}
+
+.delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.delete-actions .btn-cancel {
+  background: transparent;
+  cursor: pointer;
+}
+
+.btn-delete-confirm {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: #e74c3c;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-delete-confirm:disabled,
+.delete-actions .btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 480px) {

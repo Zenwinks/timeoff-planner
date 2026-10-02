@@ -36,7 +36,19 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // La connexion et l'API sont au serveur : le service worker ne doit
+        // pas y répondre index.html à sa place.
+        navigateFallbackDenylist: [/^\/auth\//, /^\/api\//, /^\/healthz$/],
       },
     }),
   ],
+  // En développement, Vite sert la PWA et passe le reste au serveur Node
+  // (npm run dev:server), avec PUBLIC_URL=http://localhost:5173.
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3000',
+      '/auth': 'http://localhost:3000',
+      '/healthz': 'http://localhost:3000',
+    },
+  },
 })
