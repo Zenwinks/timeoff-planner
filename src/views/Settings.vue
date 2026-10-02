@@ -8,6 +8,7 @@ const router = useRouter()
 const loading = ref(true)
 const saving = ref(false)
 const isNew = ref(false)
+const saveError = ref(null)
 const userEmail = ref('')
 const confirmingDelete = ref(false)
 const deleting = ref(false)
@@ -84,9 +85,16 @@ async function removeRttYear(item) {
 
 async function save() {
   saving.value = true
+  saveError.value = null
 
-  // Le serveur crée les paramètres s'ils n'existent pas encore, sinon les remplace.
-  await api.saveSettings(form.value)
+  try {
+    // Le serveur crée les paramètres s'ils n'existent pas encore, sinon les remplace.
+    await api.saveSettings(form.value)
+  } catch (error) {
+    saveError.value = `Enregistrement impossible : ${error.message}`
+    saving.value = false
+    return
+  }
 
   saving.value = false
   router.push('/')
@@ -171,6 +179,7 @@ async function deleteAccount() {
         </div>
         <p v-if="newRttYearError" class="rtt-year-error">{{ newRttYearError }}</p>
 
+        <p v-if="saveError" class="rtt-year-error">{{ saveError }}</p>
         <div class="form-actions">
           <router-link to="/" class="btn-cancel" v-if="!isNew">Annuler</router-link>
           <button type="submit" class="btn-save" :disabled="saving">
