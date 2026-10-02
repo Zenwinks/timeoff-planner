@@ -1,0 +1,35 @@
+# Le contexte de build ne doit contenir que ce qu'un clone propre contient
+# déjà, et jamais un secret ni une donnée personnelle : ce qui entre dans le
+# contexte est envoyé au démon Docker, et le `COPY . .` le fait entrer dans
+# l'étape de construction.
+
+# Secrets.
+.env*
+
+# Bases et sauvegardes : des données personnelles. La base de production vit
+# sur son propre volume ; les sauvegardes de Supabase, hors du dépôt.
+.data
+sauvegardes
+supabase-*
+backup*
+*.dump
+supabase*.sql
+snapshot.json
+reference.json
+reference.txt
+SHA256SUMS
+*.sqlite
+*.sqlite-*
+*.db
+
+# Dépendances et sorties de build : l'image les refait pour Linux.
+node_modules
+dist
+
+# Historique, outillage local et ce que l'image n'utilise pas.
+.git
+.claude
+.vscode
+tests
+*.log
+.DS_Store
