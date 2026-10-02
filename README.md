@@ -24,6 +24,12 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
   avec code, `state`, `nonce` et PKCE. Un compte se retrouve par son
   identifiant Google (`sub`), jamais par son adresse ; un `sub` inconnu crée un
   compte.
+- **Le client Google peut rester en « Testing »** : l'app ne demande que
+  `openid` et `email`, et Google laisse alors entrer tout compte, sans liste de
+  comptes de test ni avertissement
+  ([aide Google](https://support.google.com/cloud/answer/15549945)). Demander
+  un autre accès (Agenda…) réserverait la connexion aux comptes de test,
+  jusqu'à publication et vérification de l'app.
 - **La session** : un cookie `HttpOnly`, `Secure` (en HTTPS), `SameSite=Lax`,
   préfixé `__Host-`, valable 30 jours et prolongé à l'usage. La base ne garde
   que l'empreinte HMAC du jeton : changer `SESSION_SECRET` déconnecte tout le

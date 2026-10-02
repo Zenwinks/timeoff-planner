@@ -32,6 +32,10 @@ export function createGoogleOidc(config) {
     async authorizationUrl({ state, nonce, codeVerifier }) {
       return openid.buildAuthorizationUrl(await discover(), {
         redirect_uri: config.redirectUri,
+        // openid et email seulement : avec ces accès, Google laisse entrer tout
+        // compte même quand le client est en « Testing », sans liste de comptes
+        // de test. Un accès de plus (Agenda…) réserverait la connexion à ces
+        // comptes, jusqu'à publication et vérification de l'app par Google.
         scope: 'openid email',
         state,
         nonce,
