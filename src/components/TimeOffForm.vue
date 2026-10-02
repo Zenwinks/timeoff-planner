@@ -39,6 +39,18 @@ function disabledDates(date) {
   return day === 0 || day === 6 || isHolidayDate(date)
 }
 
+// La demi-journée ne vaut que pour un jour seul : une période de plusieurs
+// jours se pose en journées entières, et le champ Durée disparaît alors.
+watch(isSingleDay, single => {
+  if (!single) formDuration.value = 1
+})
+
+// Fermé, le formulaire repart de zéro : rouvert, il ne garde rien d'un congé
+// modifié ni d'une saisie abandonnée.
+watch(() => props.modelValue, open => {
+  if (!open) clearFields()
+})
+
 watch([formDateRange, formType, formDuration, formStatus], () => {
   forceConfirm.value = false
   if (!props.checkBalance || !formDateRange.value) {
@@ -102,7 +114,7 @@ function setSaving(val) {
   formSaving.value = val
 }
 
-function reset() {
+function clearFields() {
   formDateRange.value = null
   formType.value = 'conge'
   formStatus.value = 'brouillon'
@@ -112,6 +124,10 @@ function reset() {
   hasBlockingWarning.value = false
   forceConfirm.value = false
   formSaving.value = false
+}
+
+function reset() {
+  clearFields()
   emit('update:modelValue', false)
 }
 
@@ -124,9 +140,10 @@ defineExpose({ setWarnings, cancelWarning, setSaving, reset, loadGroup })
       <h3>{{ isEditing ? 'Modifier un congé' : 'Poser un congé' }}</h3>
       <div class="form-row">
         <div class="form-group date-picker-group">
-          <label>Période</label>
+          <label for="dp-input-period">Période</label>
           <VueDatePicker
             v-model="formDateRange"
+            uid="period"
             range
             :enable-time-picker="false"
             :disabled-dates="disabledDates"
@@ -140,15 +157,15 @@ defineExpose({ setWarnings, cancelWarning, setSaving, reset, loadGroup })
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Type</label>
-          <select v-model="formType">
+          <label for="timeoff-type">Type</label>
+          <select id="timeoff-type" v-model="formType">
             <option value="conge">Congé (CP)</option>
             <option value="rtt">RTT</option>
           </select>
         </div>
         <div class="form-group">
-          <label>Statut</label>
-          <select v-model="formStatus">
+          <label for="timeoff-status">Statut</label>
+          <select id="timeoff-status" v-model="formStatus">
             <option value="brouillon">Brouillon</option>
             <option value="demande">Demandé</option>
             <option value="accepte">Accepté</option>
@@ -156,8 +173,8 @@ defineExpose({ setWarnings, cancelWarning, setSaving, reset, loadGroup })
           </select>
         </div>
         <div class="form-group" v-if="isSingleDay">
-          <label>Durée</label>
-          <select v-model="formDuration">
+          <label for="timeoff-duration">Durée</label>
+          <select id="timeoff-duration" v-model="formDuration">
             <option :value="1">Journée entière</option>
             <option :value="0.5">Demi-journée</option>
           </select>

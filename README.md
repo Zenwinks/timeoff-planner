@@ -48,16 +48,20 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 
 ### L'API
 
-| Route | Remplace (supabase-js) |
+| Route | Rôle |
 | --- | --- |
-| `GET /api/me` | `auth.getUser()`, `auth.getSession()` |
-| `GET` / `PUT /api/settings` | `user_settings` : select, insert, update |
-| `GET` / `POST /api/yearly-rtt` | `yearly_rtt` : select (trié par année), insert |
-| `PATCH` / `DELETE /api/yearly-rtt/:id` | `yearly_rtt` : update, delete |
-| `GET` / `POST` / `DELETE /api/entries` | `time_off_entries` : select, insert, delete |
-| `GET /auth/google`, `GET /auth/callback` | `auth.signInWithOAuth({ provider: 'google' })` |
-| `POST /auth/logout` | `auth.signOut()` |
-| `DELETE /api/account` | (nouveau) suppression du compte et de ses données |
+| `GET /api/me` | le compte connecté |
+| `GET` / `PUT /api/settings` | les paramètres ; avec `yearly_rtt`, le `PUT` remplace aussi la liste des RTT par année, dans la même transaction |
+| `GET /api/yearly-rtt` | les RTT par année, triés |
+| `GET` / `POST` / `DELETE /api/entries` | les jours posés : lire, poser, retirer (tout ou rien) |
+| `POST /api/entries/replace` | modifier un congé : ses anciens jours remplacés par les nouveaux, tout ou rien |
+| `GET /auth/google`, `GET /auth/callback` | la connexion avec Google |
+| `POST /auth/logout` | la déconnexion de l'appareil |
+| `DELETE /api/account` | la suppression du compte et de toutes ses données |
+
+`POST /api/yearly-rtt`, `PATCH` et `DELETE /api/yearly-rtt/:id` ne servent plus
+à l'app depuis octobre 2026 : elles restent pour un onglet resté ouvert sur une
+ancienne version, et pourront partir à la prochaine version.
 
 Les lignes ont le format que renvoyait Supabase : mêmes colonnes, nombres en
 nombres, dates en `AAAA-MM-JJ`.
@@ -70,10 +74,21 @@ npm install
 npm run dev:server      # l'API, sur http://localhost:3000
 npm run dev             # la PWA, sur http://localhost:5173 (relaie /api et /auth)
 npm test                # serveur et cloisonnement entre comptes
+npm run test:e2e        # parcours dans le navigateur, sur ordinateur et sur mobile
 ```
 
 Le client Google doit connaître `http://localhost:5173/auth/callback` comme
 adresse de retour (ou `:3000` pour le serveur seul et Docker).
+
+- **Les tests dans le navigateur** (`e2e/`, Playwright) pilotent l'Edge déjà
+  installé (`PW_CHANNEL=chrome` pour Chrome) : rien à télécharger. Chaque test a
+  son propre compte fictif, et le navigateur vit le lundi 5 octobre 2026.
+- **Voir l'app sans données réelles** : `npm run demo:seed` crée
+  `.data/demo.sqlite` avec un compte fictif (`scripts/lib/demo.mjs`) et affiche
+  la ligne à coller dans la console du navigateur pour s'y connecter. Lancer
+  ensuite le serveur avec `DATABASE_PATH=.data/demo.sqlite`.
+- **Les icônes PNG** (Android, iPhone) se tirent du SVG avec
+  `node scripts/generate-icons.mjs`, seulement quand l'icône change.
 
 ## Sortie de Supabase
 

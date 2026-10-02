@@ -6,6 +6,7 @@ import { HOLIDAY_KEYS } from '../holidays'
 
 const router = useRouter()
 const loading = ref(true)
+const loadError = ref(null)
 const saving = ref(false)
 const isNew = ref(false)
 const saveError = ref(null)
@@ -22,6 +23,8 @@ const form = ref({
   journee_solidarite: null,
 })
 
+// Les RTT par année se modifient ici et s'enregistrent avec le reste, d'un seul
+// coup : « Annuler » n'a rien à défaire.
 const yearlyRtt = ref([])
 const newRttYear = ref(new Date().getFullYear())
 const newRttCount = ref(9)
@@ -32,64 +35,75 @@ const newRttYearError = computed(() => {
   return null
 })
 
-onMounted(async () => {
-  const user = await getCurrentUser()
-  userEmail.value = user?.email ?? ''
+async function load() {
+  loading.value = true
+  loadError.value = null
 
-  const data = await api.getSettings()
+  try {
+    const [user, data, rttData] = await Promise.all([getCurrentUser(), api.getSettings(), api.listYearlyRtt()])
+    userEmail.value = user?.email ?? ''
 
-  if (data) {
-    form.value = {
-      start_year: data.start_year,
-      initial_conges: data.initial_conges,
-      initial_rtt: data.initial_rtt,
-      conges_increment_per_month: data.conges_increment_per_month,
-      journee_solidarite: data.journee_solidarite || null,
+    if (data) {
+      form.value = {
+        start_year: data.start_year,
+        initial_conges: data.initial_conges,
+        initial_rtt: data.initial_rtt,
+        conges_increment_per_month: data.conges_increment_per_month,
+        journee_solidarite: data.journee_solidarite || null,
+      }
+      newRttYear.value = data.start_year
+    } else {
+      isNew.value = true
     }
-    newRttYear.value = data.start_year
-  } else {
-    isNew.value = true
+
+    yearlyRtt.value = rttData.map(({ year, rtt_count }) => ({ year, rtt_count }))
+    if (rttData.length > 0) {
+      newRttYear.value = rttData[rttData.length - 1].year + 1
+    }
+
+    loading.value = false
+  } catch (error) {
+    loadError.value = error.message
   }
+}
 
-  const rttData = await api.listYearlyRtt()
+onMounted(load)
 
-  yearlyRtt.value = rttData
-
-  if (rttData.length > 0) {
-    newRttYear.value = rttData[rttData.length - 1].year + 1
-  }
-
-  loading.value = false
-})
-
-async function addRttYear() {
+function addRttYear() {
   if (newRttYearError.value) return
-
-  const data = await api.addYearlyRtt({ year: newRttYear.value, rtt_count: newRttCount.value })
-
-  if (data) {
-    yearlyRtt.value.push(data)
-    yearlyRtt.value.sort((a, b) => a.year - b.year)
-    newRttYear.value++
-  }
+  yearlyRtt.value = [...yearlyRtt.value, { year: newRttYear.value, rtt_count: newRttCount.value }]
+    .sort((a, b) => a.year - b.year)
+  newRttYear.value++
 }
 
-async function updateRttYear(item) {
-  await api.updateYearlyRtt(item.id, { rtt_count: item.rtt_count })
+function removeRttYear(item) {
+  yearlyRtt.value = yearlyRtt.value.filter(r => r.year !== item.year)
 }
 
-async function removeRttYear(item) {
-  await api.deleteYearlyRtt(item.id)
-  yearlyRtt.value = yearlyRtt.value.filter(r => r.id !== item.id)
+// Un champ vidé vaut '' : mieux vaut le dire ici qu'avec le message technique du serveur.
+function invalidField() {
+  const isNumber = value => typeof value === 'number' && Number.isFinite(value)
+  return [
+    ['Année de départ', form.value.start_year],
+    ['Congés initiaux', form.value.initial_conges],
+    ['RTT initiaux', form.value.initial_rtt],
+    ['Incrément congés / mois', form.value.conges_increment_per_month],
+    ...yearlyRtt.value.map(r => [`RTT ${r.year}`, r.rtt_count]),
+  ].find(([, value]) => !isNumber(value))?.[0] ?? null
 }
 
 async function save() {
-  saving.value = true
   saveError.value = null
+  const invalid = invalidField()
+  if (invalid) {
+    saveError.value = `« ${invalid} » doit être un nombre.`
+    return
+  }
 
+  saving.value = true
   try {
-    // Le serveur crée les paramètres s'ils n'existent pas encore, sinon les remplace.
-    await api.saveSettings(form.value)
+    // Paramètres et RTT par année ensemble : le serveur enregistre tout ou rien.
+    await api.saveSettings({ ...form.value, yearly_rtt: yearlyRtt.value })
   } catch (error) {
     saveError.value = `Enregistrement impossible : ${error.message}`
     saving.value = false
@@ -114,40 +128,45 @@ async function deleteAccount() {
 </script>
 
 <template>
-  <div class="settings" v-if="!loading">
+  <div v-if="loadError" class="loading">
+    <p>Impossible de charger vos paramètres.</p>
+    <p class="load-error-detail">{{ loadError }}</p>
+    <button type="button" class="btn-save" @click="load">Réessayer</button>
+  </div>
+  <div class="settings" v-else-if="!loading">
     <div class="settings-card">
       <h1>Paramètres</h1>
       <p class="subtitle">Configurez votre période de référence et vos soldes initiaux</p>
 
       <form @submit.prevent="save">
         <div class="form-group">
-          <label>Année de départ</label>
-          <input type="number" v-model.number="form.start_year" :min="new Date().getFullYear() - 2" :max="new Date().getFullYear() + 2" />
+          <label for="settings-start-year">Année de départ</label>
+          <input id="settings-start-year" type="number" v-model.number="form.start_year" :min="new Date().getFullYear() - 2" :max="new Date().getFullYear() + 2" />
           <small class="hint">Le calcul démarre en janvier de cette année</small>
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label>Congés initiaux</label>
-            <input type="number" v-model.number="form.initial_conges" step="0.01" min="0" />
+            <label for="settings-initial-conges">Congés initiaux</label>
+            <input id="settings-initial-conges" type="number" v-model.number="form.initial_conges" step="0.01" min="0" />
             <small class="hint">Solde CP reporté depuis l'année N-1</small>
           </div>
           <div class="form-group">
-            <label>RTT initiaux</label>
-            <input type="number" v-model.number="form.initial_rtt" step="0.01" min="0" />
+            <label for="settings-initial-rtt">RTT initiaux</label>
+            <input id="settings-initial-rtt" type="number" v-model.number="form.initial_rtt" step="0.01" min="0" />
             <small class="hint">Solde RTT reporté depuis l'année N-1 (décimales uniquement)</small>
           </div>
         </div>
 
         <div class="form-group">
-          <label>Incrément congés / mois</label>
-          <input type="number" v-model.number="form.conges_increment_per_month" step="0.01" min="0" />
-          <small class="hint">Par défaut 2.08 (≈ 25 jours / 12 mois)</small>
+          <label for="settings-increment">Incrément congés / mois</label>
+          <input id="settings-increment" type="number" v-model.number="form.conges_increment_per_month" step="0.01" min="0" />
+          <small class="hint">Par défaut 2,08 (≈ 25 jours / 12 mois)</small>
         </div>
 
         <div class="form-group">
-          <label>Journée de solidarité</label>
-          <select v-model="form.journee_solidarite">
+          <label for="settings-solidarite">Journée de solidarité</label>
+          <select id="settings-solidarite" v-model="form.journee_solidarite">
             <option :value="null">Aucune</option>
             <option v-for="h in HOLIDAY_KEYS" :key="h.key" :value="h.key">
               {{ h.label }}
@@ -157,8 +176,9 @@ async function deleteAccount() {
         </div>
 
         <div class="section-title">RTT par année</div>
+        <p class="hint rtt-hint">Les RTT accordés chaque année, enregistrés avec le reste.</p>
         <div class="rtt-list">
-          <div v-for="item in yearlyRtt" :key="item.id" class="rtt-row">
+          <div v-for="item in yearlyRtt" :key="item.year" class="rtt-row">
             <span class="rtt-year">{{ item.year }}</span>
             <input
               type="number"
@@ -166,15 +186,15 @@ async function deleteAccount() {
               step="0.01"
               min="0"
               class="rtt-input"
-              @change="updateRttYear(item)"
+              :aria-label="`RTT ${item.year}`"
             />
-            <button type="button" class="btn-remove" @click="removeRttYear(item)">&times;</button>
+            <button type="button" class="btn-remove" :aria-label="`Retirer ${item.year}`" :title="`Retirer ${item.year}`" @click="removeRttYear(item)">&times;</button>
           </div>
           <div v-if="yearlyRtt.length === 0" class="rtt-empty">Aucune année configurée</div>
         </div>
         <div class="rtt-add">
-          <input type="number" v-model.number="newRttYear" :min="form.start_year" class="rtt-year-input" :class="{ 'input-error': newRttYearError }" />
-          <input type="number" v-model.number="newRttCount" step="0.01" min="0" class="rtt-input" />
+          <input type="number" v-model.number="newRttYear" :min="form.start_year" class="rtt-year-input" :class="{ 'input-error': newRttYearError }" aria-label="Nouvelle année" />
+          <input type="number" v-model.number="newRttCount" step="0.01" min="0" class="rtt-input" aria-label="RTT de la nouvelle année" />
           <button type="button" class="btn-add" @click="addRttYear" :disabled="!!newRttYearError">+ Ajouter</button>
         </div>
         <p v-if="newRttYearError" class="rtt-year-error">{{ newRttYearError }}</p>
@@ -275,7 +295,7 @@ input:focus, select:focus {
 
 .hint {
   display: block;
-  color: #666;
+  color: #8a8aa0;
   margin-top: 0.3rem;
   font-size: 0.8rem;
 }
@@ -418,10 +438,23 @@ input:focus, select:focus {
 
 .loading {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 0.75rem;
   min-height: 100vh;
+  padding: 1rem;
   color: #888;
+  text-align: center;
+}
+
+.load-error-detail {
+  font-size: 0.85rem;
+  color: #777;
+}
+
+.rtt-hint {
+  margin: -0.4rem 0 0.75rem;
 }
 
 .account {

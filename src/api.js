@@ -42,16 +42,16 @@ export function forgetCurrentUser() {
 
 export const api = {
   getSettings: () => request('GET', '/api/settings'),
+  // Avec `yearly_rtt`, la liste des RTT par année est remplacée dans le même enregistrement.
   saveSettings: settings => request('PUT', '/api/settings', settings),
 
   listYearlyRtt: () => request('GET', '/api/yearly-rtt'),
-  addYearlyRtt: ({ year, rtt_count }) => request('POST', '/api/yearly-rtt', { year, rtt_count }),
-  updateYearlyRtt: (id, { rtt_count }) => request('PATCH', `/api/yearly-rtt/${id}`, { rtt_count }),
-  deleteYearlyRtt: id => request('DELETE', `/api/yearly-rtt/${id}`),
 
   listEntries: () => request('GET', '/api/entries'),
   addEntries: entries => request('POST', '/api/entries', { entries }),
   deleteEntries: ids => request('DELETE', '/api/entries', { ids }),
+  // Un congé modifié : ses jours `ids` remplacés par `entries`, tout ou rien.
+  replaceEntries: (ids, entries) => request('POST', '/api/entries/replace', { ids, entries }),
 
   async logout() {
     await request('POST', '/auth/logout')

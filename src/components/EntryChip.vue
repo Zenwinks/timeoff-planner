@@ -1,10 +1,18 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import { formatPeriod } from '../format'
+
+const props = defineProps({
   group: { type: Object, required: true },
   dimmed: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['delete', 'edit'])
+
+// « CP du 27 au 31 juillet » : ce que disent les boutons aux lecteurs d'écran
+// et au survol, les icônes seules ne disant rien.
+const label = computed(() =>
+  `${props.group.type === 'conge' ? 'CP' : 'RTT'} ${formatPeriod(props.group.startDate, props.group.endDate)}`)
 </script>
 
 <template>
@@ -21,8 +29,8 @@ const emit = defineEmits(['delete', 'edit'])
       </span>
       <span v-if="group.duration === 0.5" class="chip-half">½j</span>
     </span>
-    <button class="chip-edit" @click="emit('edit', group)">✎</button>
-    <button class="chip-delete" @click="emit('delete', group)">&times;</button>
+    <button type="button" class="chip-edit" :aria-label="`Modifier ${label}`" :title="`Modifier ${label}`" @click="emit('edit', group)">✎</button>
+    <button type="button" class="chip-delete" :aria-label="`Supprimer ${label}`" :title="`Supprimer ${label}`" @click="emit('delete', group)">&times;</button>
   </div>
 </template>
 
@@ -102,30 +110,38 @@ const emit = defineEmits(['delete', 'edit'])
   border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.chip-edit {
+.chip-edit,
+.chip-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
   background: none;
   border: none;
-  color: #555;
+  border-radius: 4px;
+  color: #8a8aa0;
   cursor: pointer;
-  font-size: 0.75rem;
-  padding: 0 3px;
+  padding: 0;
   line-height: 1;
   transition: color 0.15s;
+}
+
+.chip-edit {
+  font-size: 0.75rem;
 }
 
 .chip-edit:hover {
-  color: #646cff;
+  color: #8a8fff;
 }
 
 .chip-delete {
-  background: none;
-  border: none;
-  color: #555;
-  cursor: pointer;
-  font-size: 0.85rem;
-  padding: 0 3px;
-  line-height: 1;
-  transition: color 0.15s;
+  font-size: 0.95rem;
+}
+
+.chip-edit:focus-visible,
+.chip-delete:focus-visible {
+  outline: 2px solid #646cff;
 }
 
 .chip-delete:hover {

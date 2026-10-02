@@ -1,9 +1,11 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { api } from '../api'
 import { useRouter } from 'vue-router'
 import { setSolidarite } from '../holidays'
 import { useBalance, getWorkingDaysInRange } from '../composables/useBalance'
+import { showToast } from '../composables/useToasts'
+import { formatDays, formatPeriod } from '../format'
 import StatusLegend from '../components/StatusLegend.vue'
 import EntryChip from '../components/EntryChip.vue'
 import TimeOffForm from '../components/TimeOffForm.vue'
@@ -13,34 +15,49 @@ const settings = ref(null)
 const yearlyRtt = ref([])
 const allEntries = ref([])
 const loading = ref(true)
+const loadError = ref(null)
 
 const showForm = ref(false)
 const formRef = ref(null)
 const editingGroup = ref(null)
 
-// Legend hover filter
-const hoveredStatus = ref(null)
-const isTouchDevice = ref(false)
+// Le statut mis en avant par la légende : fixé d'un clic, ou survolé à la souris.
+const pinnedStatus = ref(null)
+const previewStatus = ref(null)
+const highlightedStatus = computed(() => previewStatus.value ?? pinnedStatus.value)
 
 const { monthlyRecap, checkNegativeBalance } = useBalance(settings, yearlyRtt, allEntries)
 
 async function loadData() {
   loading.value = true
+  loadError.value = null
 
-  const s = await api.getSettings()
-  settings.value = s
-  setSolidarite(s?.journee_solidarite)
+  try {
+    const s = await api.getSettings()
+    settings.value = s
+    setSolidarite(s?.journee_solidarite)
 
-  if (!s) {
-    router.push('/settings')
-    return
+    if (!s) {
+      router.push('/settings')
+      return
+    }
+
+    const [rttData, entriesData] = await Promise.all([api.listYearlyRtt(), api.listEntries()])
+    yearlyRtt.value = rttData
+    allEntries.value = entriesData
+    loading.value = false
+  } catch (error) {
+    loadError.value = error.message
   }
+}
 
-  const [rttData, entriesData] = await Promise.all([api.listYearlyRtt(), api.listEntries()])
-  yearlyRtt.value = rttData
-  allEntries.value = entriesData
-
-  loading.value = false
+function toggleForm() {
+  if (showForm.value) {
+    showForm.value = false
+    editingGroup.value = null
+  } else {
+    showForm.value = true
+  }
 }
 
 async function onFormSubmit({ dateRange, type, status, duration, editingGroup: group, forceConfirm }) {
@@ -57,25 +74,21 @@ async function onFormSubmit({ dateRange, type, status, duration, editingGroup: g
   formRef.value?.setSaving(true)
 
   try {
-    // If editing, delete the old entries first
-    if (group) {
-      const ids = group.entries.map(e => e.id)
-      await api.deleteEntries(ids)
-      allEntries.value = allEntries.value.filter(e => !ids.includes(e.id))
-    }
+    const startDate = Array.isArray(dateRange) ? dateRange[0] : dateRange
+    const endDate = Array.isArray(dateRange) ? dateRange[1] : dateRange
 
-    const range = dateRange
-    const startDate = Array.isArray(range) ? range[0] : range
-    const endDate = Array.isArray(range) ? range[1] : range
-    const workingDays = getWorkingDaysInRange(startDate, endDate)
+    // Les jours ouvrés de la période, sauf ceux d'un autre congé : le congé
+    // modifié, lui, libère les siens.
+    const replaced = new Set(group?.entries.map(e => e.id) ?? [])
+    const taken = new Set(allEntries.value.filter(e => !replaced.has(e.id)).map(e => e.date))
+    const rows = getWorkingDaysInRange(startDate, endDate)
+      .filter(date => !taken.has(date))
+      .map(date => ({ date, type, status, duration }))
 
-    const existingDates = new Set(allEntries.value.map(e => e.date))
-    const newDays = workingDays.filter(d => !existingDates.has(d))
-
-    if (newDays.length > 0) {
-      await api.addEntries(newDays.map(date => ({ date, type, status, duration })))
-      allEntries.value = await api.listEntries()
-    }
+    // Modifier, c'est remplacer les jours d'un seul coup : un échec ne perd rien.
+    if (group) await api.replaceEntries([...replaced], rows)
+    else if (rows.length > 0) await api.addEntries(rows)
+    allEntries.value = await api.listEntries()
   } catch (error) {
     formRef.value?.setSaving(false)
     formRef.value?.setWarnings([`Enregistrement impossible : ${error.message}`], true)
@@ -96,8 +109,27 @@ function onEditGroup(group) {
 
 async function deleteGroup(group) {
   const ids = group.entries.map(e => e.id)
-  await api.deleteEntries(ids)
+  try {
+    await api.deleteEntries(ids)
+  } catch (error) {
+    showToast({ message: `Suppression impossible : ${error.message}`, tone: 'error' })
+    return
+  }
   allEntries.value = allEntries.value.filter(e => !ids.includes(e.id))
+  showToast({
+    message: `${group.type === 'conge' ? 'Congé' : 'RTT'} ${formatPeriod(group.startDate, group.endDate)} supprimé.`,
+    action: { label: 'Annuler', run: () => restoreGroup(group) },
+  })
+}
+
+// « Annuler » après une suppression : les mêmes jours, reposés à l'identique.
+async function restoreGroup(group) {
+  try {
+    await api.addEntries(group.entries.map(({ date, type, status, duration }) => ({ date, type, status, duration })))
+    allEntries.value = await api.listEntries()
+  } catch (error) {
+    showToast({ message: `Impossible de rétablir ce congé : ${error.message}`, tone: 'error' })
+  }
 }
 
 async function logout() {
@@ -105,24 +137,27 @@ async function logout() {
   router.push('/login')
 }
 
-onMounted(() => {
-  window.addEventListener('touchstart', () => { isTouchDevice.value = true }, { once: true })
-  loadData()
-})
+onMounted(loadData)
 </script>
 
 <template>
-  <div class="dashboard" v-if="!loading">
+  <div v-if="loadError" class="state">
+    <p>Impossible de charger vos congés.</p>
+    <p class="state-detail">{{ loadError }}</p>
+    <button type="button" class="btn-add" @click="loadData">Réessayer</button>
+  </div>
+  <div v-else-if="loading" class="state">Chargement...</div>
+  <div v-else class="dashboard">
     <header>
       <div class="header-left">
         <h1>TimeOff Planner</h1>
       </div>
       <div class="header-right">
-        <button class="btn-add" @click="() => { if (showForm) { showForm = false; editingGroup = null } else { showForm = true } }">
+        <button type="button" class="btn-add" @click="toggleForm">
           {{ showForm ? 'Fermer' : '+ Poser un congé' }}
         </button>
         <router-link to="/settings" class="settings-link">Paramètres</router-link>
-        <button class="btn-logout" @click="logout">Déconnexion</button>
+        <button type="button" class="btn-logout" @click="logout">Déconnexion</button>
       </div>
     </header>
 
@@ -135,9 +170,9 @@ onMounted(() => {
     />
 
     <StatusLegend
-      :hovered-status="hoveredStatus"
-      :is-touch-device="isTouchDevice"
-      @update:hovered-status="hoveredStatus = $event"
+      v-model="pinnedStatus"
+      :highlighted="highlightedStatus"
+      @preview="previewStatus = $event"
     />
 
     <!-- Monthly recap table -->
@@ -148,38 +183,42 @@ onMounted(() => {
             <th>Mois</th>
             <th class="th-num">Total</th>
             <th class="th-num">CP</th>
-            <th class="th-num">Posés</th>
+            <th class="th-num col-used">Posés</th>
             <th class="th-num">RTT</th>
-            <th class="th-num">Posés</th>
-            <th>Détail</th>
+            <th class="th-num col-used">Posés</th>
+            <th class="col-detail">Détail</th>
           </tr>
         </thead>
         <tbody>
           <template v-for="row in monthlyRecap" :key="row.label">
             <tr :class="{ current: row.isCurrent }">
               <td class="month-label">{{ row.label }}</td>
-              <td class="num" :class="{ negative: row.total < 0 }">{{ row.total }}</td>
-              <td class="num cp" :class="{ negative: row.cp < 0 }">{{ row.cp }}</td>
-              <td class="num used">{{ row.cpUsed || '' }}</td>
+              <td class="num" :class="{ negative: row.total < 0 }">{{ formatDays(row.total) }}</td>
+              <td class="num cp" :class="{ negative: row.cp < 0 }">{{ formatDays(row.cp) }}</td>
+              <td class="num used col-used">{{ row.cpUsed ? formatDays(row.cpUsed) : '' }}</td>
               <td class="num rtt" :class="{ negative: row.rtt < 0 }">
-                {{ row.rtt }}
+                {{ formatDays(row.rtt) }}
                 <span v-if="row.rttDecemberWarning" class="rtt-warn">⚠</span>
               </td>
-              <td class="num used">{{ row.rttUsed || '' }}</td>
-              <td class="detail">
-                <EntryChip
-                  v-for="(group, gi) in row.groups"
-                  :key="gi"
-                  :group="group"
-                  :dimmed="!!hoveredStatus && hoveredStatus !== group.status"
-                  @delete="deleteGroup"
-                  @edit="onEditGroup"
-                />
+              <td class="num used col-used">{{ row.rttUsed ? formatDays(row.rttUsed) : '' }}</td>
+              <td class="detail" :class="{ empty: !row.groups.length }">
+                <!-- Les puces dans leur propre boîte : la cellule reste une cellule
+                     de tableau, alignée sur les autres. -->
+                <div class="detail-chips">
+                  <EntryChip
+                    v-for="(group, gi) in row.groups"
+                    :key="gi"
+                    :group="group"
+                    :dimmed="!!highlightedStatus && highlightedStatus !== group.status"
+                    @delete="deleteGroup"
+                    @edit="onEditGroup"
+                  />
+                </div>
               </td>
             </tr>
             <tr v-if="row.rttDecemberWarning" class="rtt-warn-row">
               <td colspan="7" class="rtt-warn-cell">
-                ⚠ Il vous reste {{ row.rtt }} RTT — pensez à les poser avant le 31 décembre. Seules les décimales seront reportées en janvier.
+                ⚠ Il vous reste {{ formatDays(row.rtt) }} RTT — pensez à les poser avant le 31 décembre. Seules les décimales seront reportées en janvier.
               </td>
             </tr>
           </template>
@@ -187,7 +226,6 @@ onMounted(() => {
       </table>
     </div>
   </div>
-  <div v-else class="loading">Chargement...</div>
 </template>
 
 <style scoped>
@@ -364,19 +402,28 @@ header h1 {
   color: #888;
 }
 
-.detail {
+.detail-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
   align-items: center;
 }
 
-.loading {
+.state {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 0.75rem;
   min-height: 100vh;
+  padding: 1rem;
   color: #888;
+  text-align: center;
+}
+
+.state-detail {
+  font-size: 0.85rem;
+  color: #777;
 }
 
 @media (max-width: 600px) {
@@ -426,26 +473,58 @@ header h1 {
     padding: 0 0.6rem;
   }
 
-  .recap-table {
-    font-size: 0.85rem;
-    table-layout: auto;
+  /* Chaque mois en deux lignes : les soldes, puis les congés posés sur toute
+     la largeur. Les colonnes « Posés » s'effacent : les puces disent déjà ce
+     qui est posé. Plus rien ne dépasse de l'écran. */
+  .recap-table,
+  .recap-table thead,
+  .recap-table tbody {
+    display: block;
+  }
+
+  .recap-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #0f0f1e;
+  }
+
+  .recap-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr));
+    align-items: center;
+    border-bottom: 1px solid #1a1a30;
+  }
+
+  .recap-table thead tr {
+    border-bottom-color: #2a2a40;
   }
 
   .recap-table th {
+    position: static;
+    box-shadow: none;
     padding: 0.4rem 0.35rem;
     font-size: 0.7rem;
   }
 
-  .recap-table th.th-num {
-    width: auto;
-  }
-
-  .recap-table th:first-child {
-    width: auto;
+  .recap-table .col-used,
+  .recap-table .col-detail,
+  .recap-table td.detail.empty {
+    display: none;
   }
 
   .recap-table td {
     padding: 0.4rem 0.35rem;
+    border-bottom: none;
+  }
+
+  .recap-table td.detail,
+  .rtt-warn-row td {
+    grid-column: 1 / -1;
+  }
+
+  .recap-table td.detail {
+    padding-top: 0;
   }
 }
 </style>

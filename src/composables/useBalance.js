@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { isHoliday } from '../holidays.js'
 import { monthNames } from '../constants.js'
+import { formatDays } from '../format.js'
 
 export function formatDate(date) {
   const y = date.getFullYear()
@@ -165,12 +166,12 @@ export function useBalance(settings, yearlyRtt, allEntries) {
 
     for (const row of balances) {
       const label = `${monthNames[row.month]} ${row.year}`
-      if (row.cpBalance < 0) warnings.push(`CP en négatif sur ${label} (${Math.round(row.cpBalance * 100) / 100})`)
+      if (row.cpBalance < 0) warnings.push(`CP en négatif sur ${label} (${formatDays(row.cpBalance)})`)
       if (row.rttBalance <= -1) {
-        warnings.push(`RTT : solde ne peut pas descendre en dessous de -1 sur ${label} (${Math.round(row.rttBalance * 100) / 100})`)
+        warnings.push(`RTT : solde ne peut pas descendre en dessous de -1 sur ${label} (${formatDays(row.rttBalance)})`)
         blocking = true
       } else if (row.rttBalance < 0) {
-        warnings.push(`RTT en négatif sur ${label} (${Math.round(row.rttBalance * 100) / 100})`)
+        warnings.push(`RTT en négatif sur ${label} (${formatDays(row.rttBalance)})`)
       }
     }
 
