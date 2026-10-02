@@ -131,4 +131,4 @@ après. Les scripts ne font que le lire.
 | Proxy | l'app compare l'en-tête `Origin` à `PUBLIC_URL` ; elle n'utilise ni `Host` ni `X-Forwarded-*` |
 | Migrations | appliquées par le serveur au démarrage |
 | Arrêt | `SIGTERM` : finit les requêtes en cours et ferme la base |
-| Déposer une base migrée | conteneur arrêté : copier `timeoff.sqlite` dans le volume (propriétaire `node`, uid 1000), sans `-wal` ni `-shm` à côté, comparer son SHA-256 à celui qu'a affiché la migration, puis démarrer |
+| Déposer une base migrée | conteneur arrêté : **retirer `timeoff.sqlite-wal` et `timeoff.sqlite-shm`** de la base précédente (SQLite rejouerait sinon son journal sur la nouvelle), copier `timeoff.sqlite` dans le volume (propriétaire `node`, uid 1000), comparer son SHA-256 à celui qu'a affiché la migration, puis démarrer. Les comptes créés sur la base précédente disparaissent avec elle : chacun retrouve le sien, repris de Supabase, par son `sub` |

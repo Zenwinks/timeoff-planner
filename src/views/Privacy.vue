@@ -1,7 +1,6 @@
 <script setup>
-// L'adresse où joindre le responsable du service. À remplir avant la mise en
-// ligne : tant qu'elle est vide, la page n'affiche pas de ligne de contact.
-const CONTACT_EMAIL = ''
+// L'adresse où joindre le responsable du service.
+const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
 </script>
 
 <template>
@@ -61,9 +60,7 @@ const CONTACT_EMAIL = ''
       <h2>Vos droits</h2>
       <p>
         Vous voyez et modifiez toutes vos données dans l'app, et pouvez les effacer à tout moment.
-        <template v-if="CONTACT_EMAIL">
-          Pour toute question : <a :href="`mailto:${CONTACT_EMAIL}`">{{ CONTACT_EMAIL }}</a>.
-        </template>
+        Pour toute question : <a :href="`mailto:${CONTACT_EMAIL}`">{{ CONTACT_EMAIL }}</a>.
         Vous pouvez aussi vous adresser à la <a href="https://www.cnil.fr" rel="noopener">CNIL</a>.
       </p>
 
