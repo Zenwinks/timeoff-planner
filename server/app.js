@@ -12,7 +12,7 @@ import { createAuth, createGoogleOidc } from './auth.js'
 import { HttpError, readJson, sendJson, sendNoContent } from './http.js'
 import { createStatic } from './static.js'
 import { createStore } from './store.js'
-import { entriesInput, entryIdsInput, isUuid, settingsInput, yearlyRttInput, yearlyRttPatchInput } from './validation.js'
+import { entriesInput, entriesReplaceInput, entryIdsInput, isUuid, settingsInput, yearlyRttInput, yearlyRttPatchInput } from './validation.js'
 
 const WRITES = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -72,12 +72,18 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
     // ── Paramètres (user_settings) ─────────────────────────────────────────
     { method: 'GET', path: '/api/settings', handler: ({ res, user }) =>
       sendJson(res, 200, store.getSettings(user.id)) },
-    { method: 'PUT', path: '/api/settings', handler: async ({ req, res, user }) =>
-      sendJson(res, 200, store.putSettings(user.id, settingsInput(await readJson(req)))) },
+    // Avec `yearly_rtt`, la liste des RTT par année est remplacée dans la même transaction.
+    { method: 'PUT', path: '/api/settings', handler: async ({ req, res, user }) => {
+      const { settings, yearlyRtt } = settingsInput(await readJson(req))
+      sendJson(res, 200, store.putSettings(user.id, settings, yearlyRtt))
+    } },
 
     // ── RTT par année (yearly_rtt) ─────────────────────────────────────────
     { method: 'GET', path: '/api/yearly-rtt', handler: ({ res, user }) =>
       sendJson(res, 200, store.listYearlyRtt(user.id)) },
+    // Les trois routes qui suivent ne servent plus à l'app, qui enregistre ses RTT
+    // avec les paramètres (PUT /api/settings). Elles restent le temps qu'aucune
+    // version d'avant octobre 2026 ne tourne encore dans un onglet ouvert.
     { method: 'POST', path: '/api/yearly-rtt', handler: async ({ req, res, user }) =>
       sendJson(res, 201, store.addYearlyRtt(user.id, yearlyRttInput(await readJson(req)))) },
     { method: 'PATCH', path: '/api/yearly-rtt/:id', handler: async ({ req, res, user, params }) =>
@@ -95,6 +101,11 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
     { method: 'DELETE', path: '/api/entries', handler: async ({ req, res, user }) => {
       store.deleteEntries(user.id, entryIdsInput(await readJson(req)))
       sendNoContent(res)
+    } },
+    // Modifier un congé : ses anciens jours remplacés par les nouveaux, tout ou rien.
+    { method: 'POST', path: '/api/entries/replace', handler: async ({ req, res, user }) => {
+      const { ids, entries } = entriesReplaceInput(await readJson(req))
+      sendJson(res, 200, store.replaceEntries(user.id, ids, entries))
     } },
   ].map(route => ({
     ...route,

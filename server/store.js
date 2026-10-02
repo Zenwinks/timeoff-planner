@@ -45,6 +45,9 @@ export function createStore(db) {
     yearlyRtt: db.prepare('select * from yearly_rtt where user_id = ? order by year'),
     yearlyRttById: db.prepare('select * from yearly_rtt where user_id = ? and id = ?'),
     insertYearlyRtt: db.prepare('insert into yearly_rtt (id, user_id, year, rtt_count, created_at) values (?, ?, ?, ?, ?)'),
+    upsertYearlyRtt: db.prepare(`insert into yearly_rtt (id, user_id, year, rtt_count, created_at) values (?, ?, ?, ?, ?)
+      on conflict (user_id, year) do update set rtt_count = excluded.rtt_count`),
+    deleteOtherYearlyRtt: db.prepare('delete from yearly_rtt where user_id = ? and year not in (select value from json_each(?))'),
     updateYearlyRtt: db.prepare('update yearly_rtt set rtt_count = ? where user_id = ? and id = ?'),
     deleteYearlyRtt: db.prepare('delete from yearly_rtt where user_id = ? and id = ?'),
 
@@ -104,10 +107,20 @@ export function createStore(db) {
     getSettings(userId) {
       return sql.settings.get(userId) ?? null
     },
-    /** Crée ou remplace les paramètres du compte. */
-    putSettings(userId, settings) {
-      sql.upsertSettings.run({ ...settings, id: randomUUID(), user_id: userId, now: now() })
-      return sql.settings.get(userId)
+    /**
+     * Crée ou remplace les paramètres du compte et, si `yearlyRtt` est donnée,
+     * sa liste de RTT par année : tout ou rien. Une année gardée garde sa ligne.
+     */
+    putSettings(userId, settings, yearlyRtt) {
+      return db.transaction(() => {
+        const at = now()
+        sql.upsertSettings.run({ ...settings, id: randomUUID(), user_id: userId, now: at })
+        if (yearlyRtt) {
+          for (const { year, rtt_count } of yearlyRtt) sql.upsertYearlyRtt.run(randomUUID(), userId, year, rtt_count, at)
+          sql.deleteOtherYearlyRtt.run(userId, JSON.stringify(yearlyRtt.map(r => r.year)))
+        }
+        return sql.settings.get(userId)
+      })()
     },
 
     // ── RTT par année ──────────────────────────────────────────────────────
@@ -138,31 +151,46 @@ export function createStore(db) {
     },
     /** Pose des jours, tous ou aucun (une date déjà prise annule l'ensemble). */
     addEntries(userId, entries) {
-      return db.transaction(() => {
-        const at = now()
-        const ids = entries.map(entry => {
-          const id = randomUUID()
-          try {
-            sql.insertEntry.run({ ...entry, id, user_id: userId, now: at })
-          } catch (error) {
-            if (isUniqueViolation(error)) throw new HttpError(409, `Le ${entry.date} est déjà posé.`)
-            throw error
-          }
-          return id
-        })
-        return ids.map(id => sql.entryById.get(userId, id))
-      })()
+      return db.transaction(() => insertEntries(userId, entries))()
     },
     /**
      * Retire des jours, tous ou aucun : si un seul identifiant n'est pas à ce
      * compte (ou n'existe pas), rien n'est supprimé.
      */
     deleteEntries(userId, ids) {
-      const unique = JSON.stringify([...new Set(ids)])
-      db.transaction(() => {
-        if (sql.countOwnEntries.get(userId, unique) !== new Set(ids).size) throw new HttpError(404, 'Jour introuvable.')
-        sql.deleteOwnEntries.run(userId, unique)
+      db.transaction(() => removeEntries(userId, ids))()
+    },
+    /**
+     * Modifie un congé : retire ses anciens jours et pose les nouveaux, d'un
+     * seul coup. Au moindre refus (jour d'un autre compte, date déjà prise),
+     * rien ne change : le congé n'est jamais perdu en route.
+     */
+    replaceEntries(userId, ids, entries) {
+      return db.transaction(() => {
+        removeEntries(userId, ids)
+        return insertEntries(userId, entries)
       })()
     },
+  }
+
+  function insertEntries(userId, entries) {
+    const at = now()
+    const ids = entries.map(entry => {
+      const id = randomUUID()
+      try {
+        sql.insertEntry.run({ ...entry, id, user_id: userId, now: at })
+      } catch (error) {
+        if (isUniqueViolation(error)) throw new HttpError(409, `Le ${entry.date} est déjà posé.`)
+        throw error
+      }
+      return id
+    })
+    return ids.map(id => sql.entryById.get(userId, id))
+  }
+
+  function removeEntries(userId, ids) {
+    const unique = JSON.stringify([...new Set(ids)])
+    if (sql.countOwnEntries.get(userId, unique) !== new Set(ids).size) throw new HttpError(404, 'Jour introuvable.')
+    sql.deleteOwnEntries.run(userId, unique)
   }
 }

@@ -10,9 +10,9 @@ const bad = message => new HttpError(400, message)
 
 export const isUuid = value => typeof value === 'string' && UUID.test(value)
 
-function fields(value, keys, what) {
+function fields(value, keys, what, optional = []) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad(`${what} : un objet est attendu.`)
-  const unknown = Object.keys(value).find(k => !keys.includes(k))
+  const unknown = Object.keys(value).find(k => !keys.includes(k) && !optional.includes(k))
   if (unknown) throw bad(`${what} : champ inconnu « ${unknown} ».`)
   const missing = keys.find(k => !(k in value))
   if (missing) throw bad(`${what} : le champ « ${missing} » manque.`)
@@ -39,17 +39,30 @@ function day(value, name) {
   return value
 }
 
+/**
+ * Les paramètres, et en option la liste complète des RTT par année
+ * (`yearly_rtt`) : elle remplace alors celle du compte, d'un seul coup.
+ */
 export function settingsInput(body) {
-  const s = fields(body, ['start_year', 'initial_conges', 'initial_rtt', 'conges_increment_per_month', 'journee_solidarite'], 'Paramètres')
+  const s = fields(body, ['start_year', 'initial_conges', 'initial_rtt', 'conges_increment_per_month', 'journee_solidarite'], 'Paramètres', ['yearly_rtt'])
   if (s.journee_solidarite !== null && !(typeof s.journee_solidarite === 'string' && /^[a-z0-9_]{1,40}$/.test(s.journee_solidarite))) {
     throw bad('« journee_solidarite » doit être un jour férié, ou null.')
   }
+  let yearlyRtt
+  if ('yearly_rtt' in s) {
+    if (!Array.isArray(s.yearly_rtt) || s.yearly_rtt.length > 100) throw bad('« yearly_rtt » doit lister au plus 100 années.')
+    yearlyRtt = s.yearly_rtt.map(yearlyRttInput)
+    if (new Set(yearlyRtt.map(r => r.year)).size !== yearlyRtt.length) throw bad('« yearly_rtt » : chaque année une seule fois.')
+  }
   return {
-    start_year: number(s.start_year, 'start_year', { min: 2000, max: 2100, integer: true }),
-    initial_conges: number(s.initial_conges, 'initial_conges', { min: -1000, max: 1000 }),
-    initial_rtt: number(s.initial_rtt, 'initial_rtt', { min: -1000, max: 1000 }),
-    conges_increment_per_month: number(s.conges_increment_per_month, 'conges_increment_per_month', { min: -1000, max: 1000 }),
-    journee_solidarite: s.journee_solidarite,
+    settings: {
+      start_year: number(s.start_year, 'start_year', { min: 2000, max: 2100, integer: true }),
+      initial_conges: number(s.initial_conges, 'initial_conges', { min: -1000, max: 1000 }),
+      initial_rtt: number(s.initial_rtt, 'initial_rtt', { min: -1000, max: 1000 }),
+      conges_increment_per_month: number(s.conges_increment_per_month, 'conges_increment_per_month', { min: -1000, max: 1000 }),
+      journee_solidarite: s.journee_solidarite,
+    },
+    yearlyRtt,
   }
 }
 
@@ -82,10 +95,19 @@ export function entriesInput(body) {
   })
 }
 
-export function entryIdsInput(body) {
-  const { ids } = fields(body, ['ids'], 'Jours à retirer')
+function entryIds(ids) {
   if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_DAYS || !ids.every(isUuid)) {
     throw bad(`« ids » doit lister de 1 à ${MAX_DAYS} identifiants.`)
   }
   return ids
+}
+
+export function entryIdsInput(body) {
+  return entryIds(fields(body, ['ids'], 'Jours à retirer').ids)
+}
+
+/** Un congé modifié : les jours qu'il avait (`ids`), et ceux qu'il a maintenant (`entries`). */
+export function entriesReplaceInput(body) {
+  const { ids, entries } = fields(body, ['ids', 'entries'], 'Congé modifié')
+  return { ids: entryIds(ids), entries: entriesInput({ entries }) }
 }

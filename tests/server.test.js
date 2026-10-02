@@ -239,6 +239,51 @@ describe('le portier et les fichiers', () => {
     }
   })
 
+  test('modifier un congé est tout ou rien', async () => {
+    const day = { type: 'conge', status: 'accepte', duration: 1 }
+    const dates = async () => (await t.request('GET', '/api/entries', { cookie })).json
+      .filter(e => e.date.startsWith('2026-11')).map(e => `${e.date} ${e.status}`)
+    const [first] = (await t.request('POST', '/api/entries', { cookie, body: { entries: [{ ...day, date: '2026-11-02' }] } })).json
+    await t.request('POST', '/api/entries', { cookie, body: { entries: [{ ...day, date: '2026-11-04' }] } })
+
+    // Un des nouveaux jours est déjà posé : refus, et l'ancien jour reste.
+    const clash = await t.request('POST', '/api/entries/replace', { cookie, body: {
+      ids: [first.id], entries: [{ ...day, date: '2026-11-03' }, { ...day, date: '2026-11-04' }],
+    } })
+    assert.equal(clash.status, 409)
+    assert.deepEqual(await dates(), ['2026-11-02 accepte', '2026-11-04 accepte'])
+
+    const ok = await t.request('POST', '/api/entries/replace', { cookie, body: {
+      ids: [first.id], entries: [{ ...day, date: '2026-11-02', status: 'demande' }, { ...day, date: '2026-11-03', status: 'demande' }],
+    } })
+    assert.equal(ok.status, 200)
+    assert.deepEqual(await dates(), ['2026-11-02 demande', '2026-11-03 demande', '2026-11-04 accepte'])
+  })
+
+  test('les paramètres enregistrent la liste des RTT par année d’un seul coup', async () => {
+    const settings = { start_year: 2026, initial_conges: 25, initial_rtt: 0, conges_increment_per_month: 2.08, journee_solidarite: null }
+    const rtt = async () => (await t.request('GET', '/api/yearly-rtt', { cookie })).json.map(r => [r.year, r.rtt_count])
+    const put = body => t.request('PUT', '/api/settings', { cookie, body })
+
+    assert.equal((await put({ ...settings, yearly_rtt: [{ year: 2026, rtt_count: 10 }, { year: 2027, rtt_count: 9 }] })).status, 200)
+    assert.deepEqual(await rtt(), [[2026, 10], [2027, 9]])
+    const kept = (await t.request('GET', '/api/yearly-rtt', { cookie })).json[0].id
+
+    await put({ ...settings, yearly_rtt: [{ year: 2026, rtt_count: 12 }, { year: 2028, rtt_count: 8 }] })
+    assert.deepEqual(await rtt(), [[2026, 12], [2028, 8]])
+    assert.equal((await t.request('GET', '/api/yearly-rtt', { cookie })).json[0].id, kept, 'une année gardée garde sa ligne')
+
+    // Sans yearly_rtt, la liste ne bouge pas.
+    await put(settings)
+    assert.deepEqual(await rtt(), [[2026, 12], [2028, 8]])
+
+    // Une année en double : refus, et rien ne change, paramètres compris.
+    const duplicate = await put({ ...settings, initial_conges: 1, yearly_rtt: [{ year: 2026, rtt_count: 1 }, { year: 2026, rtt_count: 2 }] })
+    assert.equal(duplicate.status, 400)
+    assert.deepEqual(await rtt(), [[2026, 12], [2028, 8]])
+    assert.equal((await t.request('GET', '/api/settings', { cookie })).json.initial_conges, 25)
+  })
+
   test('en-têtes de sécurité', async () => {
     const res = await t.request('GET', '/', { origin: null })
     assert.match(res.headers.get('content-security-policy'), /default-src 'self'/)

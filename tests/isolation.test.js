@@ -139,6 +139,27 @@ describe('cloisonnement entre comptes', () => {
     }
   })
 
+  test('modifier un congé avec les jours d’un autre compte échoue, sans rien changer', async () => {
+    const before = await aliceData()
+    const res = await t.request('POST', '/api/entries/replace', { cookie: bob, body: {
+      ids: [aliceEntries[0].id],
+      entries: [{ date: '2026-06-01', type: 'conge', status: 'accepte', duration: 1 }],
+    } })
+    assert.equal(res.status, 404)
+    assert.deepEqual(await aliceData(), before)
+    const bobs = (await t.request('GET', '/api/entries', { cookie: bob })).json
+    assert.ok(!bobs.some(e => e.date === '2026-06-01'), 'rien n’a été posé pour Bob non plus')
+  })
+
+  test('remplacer ses RTT par année ne touche pas à ceux d’un autre compte', async () => {
+    const before = await aliceData()
+    const res = await t.request('PUT', '/api/settings', { cookie: bob, body: { ...BOB_SETTINGS, yearly_rtt: [{ year: 2030, rtt_count: 4 }] } })
+    assert.equal(res.status, 200)
+    assert.deepEqual(await aliceData(), before)
+    const bobs = (await t.request('GET', '/api/yearly-rtt', { cookie: bob })).json
+    assert.deepEqual(bobs.map(r => [r.year, r.rtt_count]), [[2030, 4]])
+  })
+
   test('supprimer son compte efface toutes ses données, et rien de celles des autres', async () => {
     const before = await aliceData()
     const bobId = (await t.request('GET', '/api/me', { cookie: bob })).json.id
