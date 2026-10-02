@@ -42,3 +42,7 @@ SHA256SUMS
 *.njsproj
 *.sln
 *.sw?
+
+# Sorties des tests dans le navigateur (Playwright).
+test-results
+playwright-report

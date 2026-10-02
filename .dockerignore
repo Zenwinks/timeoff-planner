@@ -31,5 +31,8 @@ dist
 .claude
 .vscode
 tests
+e2e
+test-results
+playwright-report
 *.log
 .DS_Store

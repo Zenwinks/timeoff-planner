@@ -14,13 +14,16 @@
     "start": "node server/index.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "backup:supabase": "node scripts/backup-supabase.mjs",
-    "migrate:supabase": "node scripts/migrate-from-supabase.mjs"
+    "migrate:supabase": "node scripts/migrate-from-supabase.mjs",
+    "test:e2e": "vite build && playwright test",
+    "demo:seed": "node --env-file-if-exists=.env scripts/seed-demo.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "openid-client": "^6.8.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@vitejs/plugin-vue": "^6.0.2",
     "@vuepic/vue-datepicker": "^11.0.3",
     "vite": "^7.3.1",
