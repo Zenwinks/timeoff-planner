@@ -17,8 +17,13 @@ WORKDIR /app
 
 # Les dépendances avant les sources : tant que package.json et le lockfile ne
 # bougent pas, cette couche reste en cache.
+#
+# `--ignore-scripts` : sans ça, npm compile better-sqlite3 avec node-gyp (il le
+# fait d'office pour un binding.gyp), ce qu'Alpine ne sait pas faire. Rien n'est
+# à compiler : better-sqlite3 livre ses binaires dans son paquet, et esbuild le
+# sien dans un paquet de plateforme.
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY . .
 RUN npm run build
