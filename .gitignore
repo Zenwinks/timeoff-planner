@@ -12,6 +12,25 @@ dist
 dist-ssr
 *.local
 .env
+.env.*
+!.env.example
+
+# Sauvegardes de Supabase et bases SQLite : des données personnelles, jamais
+# dans git. Elles se rangent hors du dépôt (F:\sauvegardes\…), et
+# scripts/backup-supabase.mjs refuse d'écrire dedans. Ceci rattrape une copie
+# égarée.
+.data
+sauvegardes
+supabase-*/
+*.dump
+supabase*.sql
+snapshot.json
+reference.json
+reference.txt
+SHA256SUMS
+*.sqlite
+*.sqlite-*
+*.db
 
 # Editor directories and files
 .vscode/*

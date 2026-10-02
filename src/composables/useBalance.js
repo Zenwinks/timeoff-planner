@@ -1,6 +1,6 @@
 import { computed } from 'vue'
-import { isHoliday } from '../holidays'
-import { monthNames } from '../constants'
+import { isHoliday } from '../holidays.js'
+import { monthNames } from '../constants.js'
 
 export function formatDate(date) {
   const y = date.getFullYear()
@@ -65,11 +65,10 @@ export function groupEntries(monthEntries) {
   return groups
 }
 
-function computeBalances(settings, yearlyRtt, entries) {
+function computeBalances(settings, yearlyRtt, entries, now = new Date()) {
   const s = settings
   const startYear = Number(s.start_year)
   const startAbs = startYear * 12
-  const now = new Date()
   const nowAbs = now.getFullYear() * 12 + now.getMonth()
   const endAbs = Math.max(startAbs + 23, nowAbs + 12)
 
@@ -109,31 +108,33 @@ function computeBalances(settings, yearlyRtt, entries) {
   return rows
 }
 
+// Le récap mensuel du tableau de bord. `now` fixe le mois courant et l'horizon :
+// la sauvegarde et la migration le passent pour comparer les soldes à date égale.
+export function buildMonthlyRecap(settings, yearlyRtt, entries, now = new Date()) {
+  return computeBalances(settings, yearlyRtt, entries, now).map(row => {
+    const isCurrent = row.year === now.getFullYear() && row.month === now.getMonth()
+    const entryGroups = groupEntries(row.monthEntries)
+
+    return {
+      label: `${monthNames[row.month]} ${row.year}`,
+      year: row.year,
+      month: row.month + 1,
+      total: Math.round((row.cpBalance + row.rttBalance) * 100) / 100,
+      cp: Math.round(row.cpBalance * 100) / 100,
+      cpUsed: row.cpUsed,
+      rtt: Math.round(row.rttBalance * 100) / 100,
+      rttUsed: row.rttUsed,
+      isCurrent,
+      groups: entryGroups,
+      rttDecemberWarning: row.rttDecemberWarning,
+    }
+  })
+}
+
 export function useBalance(settings, yearlyRtt, allEntries) {
   const monthlyRecap = computed(() => {
     if (!settings.value) return []
-
-    const balances = computeBalances(settings.value, yearlyRtt.value, allEntries.value)
-    const now = new Date()
-
-    return balances.map(row => {
-      const isCurrent = row.year === now.getFullYear() && row.month === now.getMonth()
-      const entryGroups = groupEntries(row.monthEntries)
-
-      return {
-        label: `${monthNames[row.month]} ${row.year}`,
-        year: row.year,
-        month: row.month + 1,
-        total: Math.round((row.cpBalance + row.rttBalance) * 100) / 100,
-        cp: Math.round(row.cpBalance * 100) / 100,
-        cpUsed: row.cpUsed,
-        rtt: Math.round(row.rttBalance * 100) / 100,
-        rttUsed: row.rttUsed,
-        isCurrent,
-        groups: entryGroups,
-        rttDecemberWarning: row.rttDecemberWarning,
-      }
-    })
+    return buildMonthlyRecap(settings.value, yearlyRtt.value, allEntries.value)
   })
 
   function checkNegativeBalance(formDateRange, formType, formDuration, formStatus, excludeEntries = []) {
