@@ -1,11 +1,14 @@
 <script setup>
 import AppIcon from './AppIcon.vue'
 import EntryChip from './EntryChip.vue'
+import { CONFIRMED_STATUSES } from '../constants'
 import { formatDays } from '../format'
 
 // Les mois, l'un sous l'autre : les soldes de fin de mois (selon le mode), puis
 // les congés posés. Sur ordinateur, une ligne par mois sous des intitulés de
 // colonnes ; sur mobile, chaque mois tient sur sa largeur, intitulés compris.
+// En vue « Confirmé », les brouillons et les demandes, que le solde ignore,
+// passent en gris.
 defineProps({
   months: { type: Array, required: true },
   mode: { type: String, required: true },
@@ -56,6 +59,7 @@ const emit = defineEmits(['open'])
             :key="i"
             :group="group"
             :dimmed="!!highlighted && highlighted !== group.status"
+            :uncounted="mode === 'confirmed' && !CONFIRMED_STATUSES.has(group.status)"
             @open="emit('open', group)"
           />
         </div>

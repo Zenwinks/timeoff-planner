@@ -67,7 +67,9 @@ const modeHint = computed(() => {
   if (mode.value === 'forecast') {
     return n ? `Tous les congés posés sont décomptés, dont ${waiting} (brouillons et demandes).` : 'Tous les congés posés sont décomptés.'
   }
-  return n ? `Seuls les congés acceptés ou imposés sont décomptés : ${waiting} ne le sont pas.` : 'Seuls les congés acceptés ou imposés sont décomptés.'
+  return n
+    ? `Seuls les congés acceptés ou imposés sont décomptés. Les brouillons et les demandes, en gris, ne le sont pas : ${waiting}.`
+    : 'Seuls les congés acceptés ou imposés sont décomptés.'
 })
 
 // ── Les mois : les passés repliés, le mois en cours en tête ──
@@ -308,7 +310,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
               <AppIcon name="chevron-right" />
             </button>
           </div>
-          <YearCalendar :year="shownYear" :entries="allEntries" :highlighted="highlightedStatus" :today="today" @open="openEntry" @pick="openNew" />
+          <YearCalendar :year="shownYear" :entries="allEntries" :highlighted="highlightedStatus" :today="today" :mode="mode" @open="openEntry" @pick="openNew" />
         </template>
       </section>
     </template>

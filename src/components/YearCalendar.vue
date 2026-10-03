@@ -1,19 +1,21 @@
 <script setup>
 import { computed } from 'vue'
 import { formatDate } from '../composables/useBalance'
-import { monthNames, statusLabels, typeLabels } from '../constants'
+import { CONFIRMED_STATUSES, monthNames, statusLabels, typeLabels } from '../constants'
 import { holidaysBetween } from '../holidays'
 
 // L'année d'un coup d'œil : les douze mois, chaque jour posé aux couleurs de
 // son type et au style de son statut, comme les puces. Une demi-journée remplit
 // la moitié gauche de sa case le matin, la droite l'après-midi, le bas si son
-// moment n'est pas précisé. Un clic sur un jour posé ouvre son congé ; sur un
-// jour ouvré libre, propose d'y poser un congé.
+// moment n'est pas précisé. En vue « Confirmé », les brouillons et les demandes,
+// que le solde ignore, passent en gris. Un clic sur un jour posé ouvre son
+// congé ; sur un jour ouvré libre, propose d'y poser un congé.
 const props = defineProps({
   year: { type: Number, required: true },
   entries: { type: Array, required: true },
   highlighted: { type: String, default: null },
   today: { type: String, required: true },
+  mode: { type: String, default: 'forecast' },
 })
 
 const emit = defineEmits(['open', 'pick'])
@@ -47,10 +49,13 @@ const months = computed(() => monthNames.map((name, m) => {
   return { name, offset, days }
 }))
 
+const uncounted = entry => props.mode === 'confirmed' && !CONFIRMED_STATUSES.has(entry.status)
+
 function entryLabel(day) {
   const e = day.entry
   const half = e.duration === 0.5 ? `, ${HALVES[e.half_day] ?? 'une demi-journée'}` : ''
-  return `${day.name} : ${typeLabels[e.type]}, ${statusLabels[e.status].toLowerCase()}${half}`
+  const outside = uncounted(e) ? ', hors du solde confirmé' : ''
+  return `${day.name} : ${typeLabels[e.type]}, ${statusLabels[e.status].toLowerCase()}${half}${outside}`
 }
 
 function halfClass(entry) {
@@ -73,7 +78,7 @@ function halfClass(entry) {
             v-if="day.entry"
             type="button"
             class="day taken num"
-            :class="[day.entry.type, day.entry.status, halfClass(day.entry), { today: day.today, dimmed: highlighted && highlighted !== day.entry.status }]"
+            :class="[day.entry.type, day.entry.status, halfClass(day.entry), { today: day.today, dimmed: highlighted && highlighted !== day.entry.status, uncounted: uncounted(day.entry) }]"
             :aria-current="day.today ? 'date' : undefined"
             :aria-label="entryLabel(day)"
             :title="entryLabel(day)"
@@ -259,5 +264,19 @@ button.day {
 
 .day.taken.dimmed {
   opacity: 0.25;
+}
+
+/* Vue « Confirmé » : ce que le solde ignore passe en gris. */
+.day.taken.uncounted {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.day.taken.uncounted:hover {
+  filter: grayscale(1) brightness(1.12);
+}
+
+.day.taken.uncounted.dimmed {
+  opacity: 0.2;
 }
 </style>

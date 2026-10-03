@@ -9,6 +9,8 @@ import { formatDays, formatPeriod } from '../format'
 const props = defineProps({
   group: { type: Object, required: true },
   dimmed: { type: Boolean, default: false },
+  // Vue « Confirmé » : un brouillon ou une demande, que le solde affiché ignore.
+  uncounted: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['open'])
@@ -23,7 +25,8 @@ const dates = computed(() =>
 // « CP du 27 au 31 juillet, accepté, 5 jours » : ce que lisent les lecteurs d'écran.
 const label = computed(() => {
   const length = days.value === 0.5 ? `une demi-journée${halfSpoken.value}` : `${formatDays(days.value)} jour${days.value > 1 ? 's' : ''}`
-  return `${typeLabels[props.group.type]} ${formatPeriod(props.group.startDate, props.group.endDate)}, ${statusLabels[props.group.status].toLowerCase()}, ${length}`
+  const outside = props.uncounted ? ', hors du solde confirmé' : ''
+  return `${typeLabels[props.group.type]} ${formatPeriod(props.group.startDate, props.group.endDate)}, ${statusLabels[props.group.status].toLowerCase()}, ${length}${outside}`
 })
 </script>
 
@@ -31,7 +34,7 @@ const label = computed(() => {
   <button
     type="button"
     class="chip"
-    :class="[group.type, group.status, { dimmed }]"
+    :class="[group.type, group.status, { dimmed, uncounted }]"
     :aria-label="label"
     :title="label"
     @click="emit('open', group)"
@@ -106,6 +109,20 @@ const label = computed(() => {
 
 .chip.dimmed {
   opacity: 0.25;
+}
+
+/* Vue « Confirmé » : ce que le solde ignore passe en gris. */
+.chip.uncounted {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.chip.uncounted:hover {
+  filter: grayscale(1) brightness(1.12);
+}
+
+.chip.uncounted.dimmed {
+  opacity: 0.2;
 }
 
 .chip-type {

@@ -19,6 +19,23 @@ test('le solde confirmé ignore brouillons et demandes, et le choix reste', asyn
   await expect(yearEndCard(page).locator('.balance.cp')).toContainText('12,05')
 })
 
+test('en vue Confirmé, ce que le solde ignore passe en gris, dans la liste comme dans le calendrier', async ({ page, account }) => {
+  await openDashboard(page)
+  await expect(page.locator('.uncounted')).toHaveCount(0)
+  await page.getByRole('group', { name: 'Soldes affichés' }).getByRole('button', { name: 'Confirmé' }).click()
+  await expect(page.getByText('Les brouillons et les demandes, en gris, ne le sont pas')).toBeVisible()
+  await expect(chip(page, 'RTT le 30 octobre, demandé, 1 jour, hors du solde confirmé')).toHaveClass(/uncounted/)
+  await expect(chip(page, 'CP du 28 au 31 décembre, brouillon, 4 jours, hors du solde confirmé')).toHaveClass(/uncounted/)
+
+  await page.getByRole('group', { name: 'Affichage' }).getByRole('button', { name: 'Calendrier' }).click()
+  const year = page.locator('.year')
+  await expect(year.getByRole('button', { name: 'Vendredi 30 octobre : RTT, demandé, hors du solde confirmé' })).toHaveClass(/uncounted/)
+  await expect(year.getByRole('button', { name: 'Vendredi 18 septembre : RTT, accepté' })).not.toHaveClass(/uncounted/)
+
+  await page.getByRole('group', { name: 'Soldes affichés' }).getByRole('button', { name: 'Prévisionnel' }).click()
+  await expect(page.locator('.uncounted')).toHaveCount(0)
+})
+
 test('le statut d’un congé change en un geste', async ({ page, account }) => {
   await openDashboard(page)
   await openChip(page, 'RTT le 30 octobre')
