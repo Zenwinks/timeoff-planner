@@ -27,6 +27,9 @@ const token = openDemoSession(db, config.sessionSecret, createDemoAccount(db))
 db.close()
 
 const cookie = config.secureCookies ? '__Host-timeoff_session' : 'timeoff_session'
+if (config.loginProblem) {
+  console.warn(`Attention, ${config.loginProblem} : le serveur refusera cette session tant que la connexion est fermée. Des valeurs quelconques suffisent pour la démonstration.`)
+}
 console.log(`Base de démonstration : ${args.db}`)
 console.log(`Dans la console du navigateur, sur ${config.origin} :`)
 console.log(`  document.cookie = "${cookie}=${token}; path=/"`)

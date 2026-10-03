@@ -128,7 +128,10 @@ adresse de retour (ou `:3000` pour le serveur seul et Docker).
 - **Voir l'app sans données réelles** : `npm run demo:seed` crée
   `.data/demo.sqlite` avec un compte fictif (`scripts/lib/demo.mjs`) et affiche
   la ligne à coller dans la console du navigateur pour s'y connecter. Lancer
-  ensuite le serveur avec `DATABASE_PATH=.data/demo.sqlite`.
+  ensuite le serveur avec `DATABASE_PATH=.data/demo.sqlite`. Si
+  `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` sont vides, y mettre des valeurs
+  quelconques : sans elles, la connexion est fermée et le serveur refuse toute
+  session, même celle du compte fictif.
 - **Les icônes PNG** (Android, iPhone) se tirent du SVG avec
   `node scripts/generate-icons.mjs`, seulement quand l'icône change.
 
