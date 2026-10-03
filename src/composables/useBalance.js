@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { isHoliday } from '../holidays.js'
-import { monthNames } from '../constants.js'
+import { CONFIRMED_STATUSES, monthNames } from '../constants.js'
 import { formatDays } from '../format.js'
 
 export function formatDate(date) {
@@ -133,10 +133,46 @@ export function buildMonthlyRecap(settings, yearlyRtt, entries, now = new Date()
 }
 
 export function useBalance(settings, yearlyRtt, allEntries) {
+  // Le solde prévisionnel : tous les jours posés sont décomptés.
   const monthlyRecap = computed(() => {
     if (!settings.value) return []
     return buildMonthlyRecap(settings.value, yearlyRtt.value, allEntries.value)
   })
+
+  // Le solde confirmé : seuls les jours acceptés ou imposés sont décomptés.
+  const confirmedRecap = computed(() => {
+    if (!settings.value) return []
+    return buildMonthlyRecap(settings.value, yearlyRtt.value, allEntries.value.filter(e => CONFIRMED_STATUSES.has(e.status)))
+  })
+
+  /**
+   * Le solde prévisionnel de fin d'année, avant et après une saisie : ce que
+   * montre le formulaire pendant qu'on choisit ses jours. `excludeEntries` :
+   * les jours du congé modifié, que la saisie remplace. null tant qu'il n'y a
+   * pas de période, ou au-delà de l'horizon du récap.
+   */
+  function previewYearEnd(formDateRange, formType, formDuration, formStatus, excludeEntries = []) {
+    if (!formDateRange || !settings.value) return null
+    const [start, end] = Array.isArray(formDateRange) ? formDateRange : [formDateRange, formDateRange]
+    if (!start) return null
+
+    const excludeIds = new Set(excludeEntries.map(e => e.id))
+    const kept = allEntries.value.filter(e => !excludeIds.has(e.id))
+    const taken = new Set(kept.map(e => e.date))
+    const newDays = getWorkingDaysInRange(start, end ?? start).filter(d => !taken.has(d))
+    const year = (end ?? start).getFullYear()
+    const december = entries => computeBalances(settings.value, yearlyRtt.value, entries).find(r => r.year === year && r.month === 11)
+
+    const before = december(allEntries.value)
+    const after = december([...kept, ...newDays.map(date => ({ date, type: formType, duration: Number(formDuration), status: formStatus }))])
+    if (!before || !after) return null
+    const round = value => Math.round(value * 100) / 100
+    return {
+      year,
+      cp: { before: round(before.cpBalance), after: round(after.cpBalance) },
+      rtt: { before: round(before.rttBalance), after: round(after.rttBalance) },
+    }
+  }
 
   function checkNegativeBalance(formDateRange, formType, formDuration, formStatus, excludeEntries = []) {
     if (!formDateRange || !settings.value) return { messages: [], blocking: false }
@@ -165,18 +201,19 @@ export function useBalance(settings, yearlyRtt, allEntries) {
     let blocking = false
 
     for (const row of balances) {
-      const label = `${monthNames[row.month]} ${row.year}`
-      if (row.cpBalance < 0) warnings.push(`CP en négatif sur ${label} (${formatDays(row.cpBalance)})`)
+      // « en décembre 2026 » : le mois en minuscule, au fil de la phrase.
+      const month = `${monthNames[row.month].toLowerCase()} ${row.year}`
+      if (row.cpBalance < 0) warnings.push(`CP en négatif en ${month} (${formatDays(row.cpBalance)})`)
       if (row.rttBalance <= -1) {
-        warnings.push(`RTT : solde ne peut pas descendre en dessous de -1 sur ${label} (${formatDays(row.rttBalance)})`)
+        warnings.push(`RTT : le solde ne peut pas descendre sous -1, il serait de ${formatDays(row.rttBalance)} en ${month}`)
         blocking = true
       } else if (row.rttBalance < 0) {
-        warnings.push(`RTT en négatif sur ${label} (${formatDays(row.rttBalance)})`)
+        warnings.push(`RTT en négatif en ${month} (${formatDays(row.rttBalance)})`)
       }
     }
 
     return { messages: warnings, blocking }
   }
 
-  return { monthlyRecap, checkNegativeBalance }
+  return { monthlyRecap, confirmedRecap, checkNegativeBalance, previewYearEnd }
 }

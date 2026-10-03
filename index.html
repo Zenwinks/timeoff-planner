@@ -5,10 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/pwa-192x192.svg" />
     <!-- iOS ne prend pas les SVG pour l'écran d'accueil : un PNG de 180 px. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f0f1e" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0e18" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f5fa" media="(prefers-color-scheme: light)" />
     <meta name="description" content="Gérez vos congés et RTT simplement" />
     <title>TimeOff Planner</title>
+    <!-- Le thème choisi dans les Paramètres, posé avant le premier affichage. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="app"></div>

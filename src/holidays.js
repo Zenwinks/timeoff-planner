@@ -84,6 +84,21 @@ export function getFrenchHolidays(year) {
   return new Set(holidays)
 }
 
+/**
+ * Les jours fériés de ces années, avec leur nom : les repères du calendrier.
+ * Sans la journée de solidarité, qui se travaille.
+ */
+export function holidaysBetween(fromYear, toYear) {
+  const labels = Object.fromEntries(HOLIDAY_KEYS.map(h => [h.key, h.label]))
+  const holidays = []
+  for (let year = fromYear; year <= toYear; year++) {
+    for (const [key, date] of Object.entries(getFrenchHolidaysMap(year))) {
+      if (key !== solidariteKey) holidays.push({ date, label: labels[key] })
+    }
+  }
+  return holidays
+}
+
 // Cache par année
 const cache = {}
 

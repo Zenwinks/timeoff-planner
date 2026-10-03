@@ -3,6 +3,12 @@ export const monthNames = [
   'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
 ]
 
+/**
+ * Les statuts qui comptent dans le solde « confirmé » : des congés acquis. Le
+ * solde « prévisionnel » compte aussi les brouillons et les demandes.
+ */
+export const CONFIRMED_STATUSES = new Set(['accepte', 'impose'])
+
 export const statusLabels = {
   brouillon: 'Brouillon',
   demande: 'Demandé',
@@ -10,9 +16,16 @@ export const statusLabels = {
   impose: 'Imposé',
 }
 
-export const statusColors = {
-  brouillon: '#888',
-  demande: '#f0ad4e',
-  accepte: '#5cb85c',
-  impose: '#c678dd',
+// Le statut se lit à son icône (et au style de la puce) ; la couleur, elle,
+// dit le type. Rien ne repose sur la couleur seule.
+export const statusIcons = {
+  brouillon: 'draft',
+  demande: 'clock',
+  accepte: 'check',
+  impose: 'lock',
+}
+
+export const typeLabels = {
+  conge: 'CP',
+  rtt: 'RTT',
 }

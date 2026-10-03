@@ -50,6 +50,8 @@ export const api = {
   listEntries: () => request('GET', '/api/entries'),
   addEntries: entries => request('POST', '/api/entries', { entries }),
   deleteEntries: ids => request('DELETE', '/api/entries', { ids }),
+  // Le statut de tous les jours d'un congé, d'un coup.
+  setEntriesStatus: (ids, status) => request('PATCH', '/api/entries', { ids, status }),
   // Un congé modifié : ses jours `ids` remplacés par `entries`, tout ou rien.
   replaceEntries: (ids, entries) => request('POST', '/api/entries/replace', { ids, entries }),
 

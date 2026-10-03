@@ -1,17 +1,139 @@
-:root {
-  font-family: Inter, system-ui, -apple-system, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+/*
+ * La base visuelle de l'app : couleurs, rayons, ombres, et les éléments
+ * communs (boutons, champs, cartes, contrôles segmentés).
+ *
+ * Sombre par défaut. Clair quand le système le demande, ou quand l'utilisateur
+ * le choisit dans les Paramètres : public/theme-init.js pose alors data-theme
+ * sur <html> avant le premier affichage.
+ *
+ * Les couleurs disent deux choses, jamais la même : le type d'un congé (CP en
+ * indigo, RTT en sarcelle) ; son statut se lit à son icône et à son style.
+ * Tous les textes visent un contraste AA (4,5:1) dans les deux thèmes.
+ */
 
-  color: #efefef;
-  background-color: #0f0f1e;
-  /* Les contrôles natifs (listes, barres de défilement) en sombre eux aussi. */
+:root {
   color-scheme: dark;
 
+  --bg: #0d0e18;
+  --surface: #161726;
+  --surface-raised: #1d1f31;
+  --surface-hover: #25273d;
+  --input-bg: #11121e;
+  --border: #282b42;
+  --border-strong: #3a3e5c;
+  --text: #ebecf4;
+  --text-muted: #a6a9c2;
+  --text-subtle: #8286a5;
+
+  --primary: #5d60f0;
+  --primary-hover: #6c6fff;
+  --primary-soft: rgba(124, 127, 255, 0.18);
+  --on-primary: #ffffff;
+  --link: #a3a6ff;
+  --focus: #8f92ff;
+
+  --danger: #f16a6a;
+  --danger-strong: #d64545;
+  --danger-soft: rgba(241, 106, 106, 0.13);
+  --warning: #f2b45f;
+  --warning-soft: rgba(242, 180, 95, 0.12);
+  --success: #55cf91;
+
+  /* Les types : `-strong` porte un texte blanc, `-soft` un texte de la couleur. */
+  --cp: #9da0ff;
+  --cp-strong: #5457e6;
+  --cp-soft: rgba(124, 127, 255, 0.17);
+  --rtt: #4fd6c4;
+  --rtt-strong: #0d7f72;
+  --rtt-soft: rgba(47, 195, 176, 0.16);
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background-color: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Le thème clair : deux fois les mêmes valeurs, pour le réglage du système
+   (avant tout choix) et pour le choix fait dans les Paramètres. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --bg: #f4f5fa;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --surface-hover: #eef0f7;
+    --input-bg: #ffffff;
+    --border: #e0e2ed;
+    --border-strong: #c6c9db;
+    --text: #161a2d;
+    --text-muted: #4a4f6b;
+    --text-subtle: #62678a;
+    --primary: #4c4fdc;
+    --primary-hover: #3f42c6;
+    --primary-soft: rgba(76, 79, 220, 0.12);
+    --on-primary: #ffffff;
+    --link: #3f42c6;
+    --focus: #4c4fdc;
+    --danger: #c23434;
+    --danger-strong: #c23434;
+    --danger-soft: #fdecec;
+    --warning: #8a5200;
+    --warning-soft: #fff3df;
+    --success: #1a8653;
+    --cp: #4245c9;
+    --cp-strong: #4c4fdc;
+    --cp-soft: #e9eafd;
+    --rtt: #0a6e63;
+    --rtt-strong: #0b7a6d;
+    --rtt-soft: #dcf3ef;
+    --shadow: 0 1px 2px rgba(22, 26, 45, 0.06), 0 4px 16px rgba(22, 26, 45, 0.06);
+    --shadow-lg: 0 12px 40px rgba(22, 26, 45, 0.18);
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f5fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #eef0f7;
+  --input-bg: #ffffff;
+  --border: #e0e2ed;
+  --border-strong: #c6c9db;
+  --text: #161a2d;
+  --text-muted: #4a4f6b;
+  --text-subtle: #62678a;
+  --primary: #4c4fdc;
+  --primary-hover: #3f42c6;
+  --primary-soft: rgba(76, 79, 220, 0.12);
+  --on-primary: #ffffff;
+  --link: #3f42c6;
+  --focus: #4c4fdc;
+  --danger: #c23434;
+  --danger-strong: #c23434;
+  --danger-soft: #fdecec;
+  --warning: #8a5200;
+  --warning-soft: #fff3df;
+  --success: #1a8653;
+  --cp: #4245c9;
+  --cp-strong: #4c4fdc;
+  --cp-soft: #e9eafd;
+  --rtt: #0a6e63;
+  --rtt-strong: #0b7a6d;
+  --rtt-soft: #dcf3ef;
+  --shadow: 0 1px 2px rgba(22, 26, 45, 0.06), 0 4px 16px rgba(22, 26, 45, 0.06);
+  --shadow-lg: 0 12px 40px rgba(22, 26, 45, 0.18);
 }
 
 * {
@@ -20,21 +142,287 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+/* Une fenêtre ouverte (panneau, détail d'un congé) : la page ne défile plus dessous. */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
 a {
-  color: #646cff;
+  color: var(--link);
   text-decoration: none;
 }
 
 a:hover {
-  color: #535bf2;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
+  text-decoration: underline;
 }
 
 input, select, button, textarea {
   /* La police du texte, pas celle du navigateur (Arial). */
   font-family: inherit;
-  font-size: 16px; /* prevents iOS zoom on focus */
+  font-size: 16px; /* pas de zoom d'iOS sur un champ */
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Boutons ─────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover {
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.btn-danger {
+  background: var(--danger-strong);
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-danger-ghost {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger-ghost:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+/* Un bouton fait d'une icône seule : son nom est dans aria-label. */
+.btn-icon {
+  min-width: 40px;
+  padding: 0.5rem;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ── Cartes et champs ────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+
+.input:hover,
+.select:hover {
+  border-color: var(--text-subtle);
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.input.invalid {
+  border-color: var(--danger);
+}
+
+/* ── Contrôle segmenté : un choix parmi quelques-uns, tous visibles ──────── */
+
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+}
+
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  flex: 1 0 auto;
+  min-height: 36px;
+  padding: 0.35rem 0.85rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+/* Sur toute la largeur de son conteneur. */
+.segmented.wide {
+  display: flex;
+}
+
+/* Les quatre statuts : deux par ligne sur un petit écran, plutôt qu'un
+   orphelin. Après .wide, qu'elle remplace alors. */
+@media (max-width: 519px) {
+  .segmented.status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.segmented button[aria-pressed='true'],
+.segmented button[aria-checked='true'] {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), inset 0 0 0 1px var(--border-strong);
+}
+
+/* ── Le calendrier (vue-datepicker) aux couleurs de l'app, dans les deux thèmes ── */
+
+:root .dp__theme_dark,
+:root .dp__theme_light {
+  --dp-font-family: inherit;
+  --dp-border-radius: var(--radius);
+  --dp-cell-border-radius: 8px;
+  --dp-background-color: var(--surface-raised);
+  --dp-text-color: var(--text);
+  --dp-hover-color: var(--surface-hover);
+  --dp-hover-text-color: var(--text);
+  --dp-hover-icon-color: var(--text);
+  --dp-primary-color: var(--primary);
+  --dp-primary-disabled-color: var(--primary-soft);
+  --dp-primary-text-color: var(--on-primary);
+  --dp-secondary-color: var(--text-subtle);
+  --dp-border-color: var(--border);
+  --dp-menu-border-color: var(--border);
+  --dp-border-color-hover: var(--border-strong);
+  --dp-border-color-focus: var(--focus);
+  --dp-disabled-color: transparent;
+  --dp-disabled-color-text: var(--text-subtle);
+  --dp-icon-color: var(--text-muted);
+  --dp-highlight-color: var(--primary-soft);
+  --dp-range-between-dates-background-color: var(--primary-soft);
+  --dp-range-between-dates-text-color: var(--text);
+  --dp-range-between-border-color: transparent;
+  --dp-tooltip-color: var(--surface-raised);
+  --dp-marker-color: var(--warning);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

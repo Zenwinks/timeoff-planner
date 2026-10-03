@@ -1,11 +1,14 @@
 <script setup>
+import AppHeader from '../components/AppHeader.vue'
+
 // L'adresse où joindre le responsable du service.
 const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
 </script>
 
 <template>
-  <div class="privacy">
-    <div class="privacy-card">
+  <AppHeader />
+  <main class="privacy">
+    <article class="card privacy-card">
       <h1>Vos données personnelles</h1>
       <p class="subtitle">
         TimeOff Planner est un service gratuit, tenu à titre personnel par Lucas.
@@ -65,44 +68,44 @@ const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
       </p>
 
       <router-link to="/" class="back">← Retour</router-link>
-    </div>
-  </div>
+    </article>
+  </main>
 </template>
 
 <style scoped>
 .privacy {
   display: flex;
   justify-content: center;
-  padding: 2rem 1rem;
+  padding: 1rem 1rem 2.5rem;
 }
 
 .privacy-card {
-  background: #1a1a2e;
-  border-radius: 12px;
-  padding: 2rem;
   width: 100%;
-  max-width: 600px;
-  font-size: 0.9rem;
-  color: #ccc;
+  max-width: 680px;
+  padding: 1.75rem 1.75rem 1.5rem;
+  font-size: 0.95rem;
+  color: var(--text-muted);
 }
 
 h1 {
-  margin: 0 0 0.5rem;
-  color: #efefef;
+  margin-bottom: 0.5rem;
+  font-size: 1.6rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 .subtitle {
-  color: #888;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 h2 {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #efefef;
   margin: 1.5rem 0 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #2a2a40;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
 p + p {
@@ -110,34 +113,26 @@ p + p {
 }
 
 ul {
-  padding-left: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  padding-left: 1.25rem;
 }
 
 strong {
-  color: #efefef;
-  font-weight: 600;
+  font-weight: 650;
+  color: var(--text);
 }
 
 .back {
   display: inline-block;
   margin-top: 2rem;
+  font-weight: 600;
 }
 
 @media (max-width: 480px) {
-  .privacy {
-    padding: 1rem 0.5rem;
-  }
-
   .privacy-card {
     padding: 1.25rem;
-    border-radius: 10px;
-  }
-
-  h1 {
-    font-size: 1.3rem;
   }
 }
 </style>

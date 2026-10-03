@@ -1,5 +1,6 @@
 <script setup>
-import { statusLabels, statusColors } from '../constants'
+import AppIcon from './AppIcon.vue'
+import { statusIcons, statusLabels } from '../constants'
 
 // La légende des statuts, qui sert aussi de filtre : un clic ou un toucher met
 // un statut en avant (v-model), un second l'enlève. À la souris, le survol en
@@ -23,7 +24,6 @@ function preview(event, key) {
 
 <template>
   <div class="legend" role="group" aria-label="Mettre un statut en avant">
-    <span class="legend-title" aria-hidden="true">Statuts :</span>
     <button
       v-for="(label, key) in statusLabels"
       :key="key"
@@ -35,7 +35,7 @@ function preview(event, key) {
       @pointerenter="preview($event, key)"
       @pointerleave="preview($event, null)"
     >
-      <span class="legend-dot" :style="{ background: statusColors[key] }" aria-hidden="true"></span>
+      <AppIcon :name="statusIcons[key]" :size="15" />
       {{ label }}
     </button>
   </div>
@@ -44,65 +44,59 @@ function preview(event, key) {
 <style scoped>
 .legend {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0;
-  margin-bottom: 0.25rem;
-  font-size: 0.75rem;
-  color: #888;
-  flex-shrink: 0;
-}
-
-.legend-title {
-  font-weight: 600;
-  color: #8a8aa0;
+  gap: 0.35rem;
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  border: none;
-  background: none;
-  color: inherit;
-  font-size: inherit;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  transition: opacity 0.2s, background 0.2s;
+  transition: opacity 0.2s, background-color 0.15s, color 0.15s;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
 
+.legend-item:hover {
+  color: var(--text);
+}
+
 .legend-item.active {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ddd;
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.legend-item[aria-pressed='true'] {
+  background: var(--primary-soft);
+  border-color: var(--focus);
+  color: var(--text);
 }
 
 .legend-item.dimmed {
-  opacity: 0.35;
+  opacity: 0.45;
 }
 
-.legend-item:focus-visible {
-  outline: 2px solid #646cff;
-  outline-offset: 1px;
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-@media (max-width: 600px) {
+/* Sur un téléphone, les quatre statuts tiennent sur une ligne. */
+@media (max-width: 519px) {
   .legend {
-    flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.25rem;
   }
 
   .legend-item {
-    min-height: 32px;
+    gap: 0.25rem;
+    padding: 0.2rem 0.45rem;
+    font-size: 0.76rem;
   }
 }
 </style>

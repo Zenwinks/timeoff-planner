@@ -4,6 +4,13 @@ Une PWA pour poser ses congés (CP) et ses RTT, et suivre ses soldes mois par
 mois. Connexion avec Google, inscription libre : chacun a son compte et ne voit
 que ses données.
 
+- **Deux soldes, au choix** : le **prévisionnel** décompte tous les congés
+  posés, brouillons et demandes compris ; le **confirmé** ne décompte que les
+  congés acceptés ou imposés.
+- **Conçue d'abord pour le mobile**, où l'on consulte, et complète sur
+  ordinateur, où l'on pose ses congés. Thème clair ou sombre, celui du système
+  par défaut.
+
 En ligne sur `https://timeoff-planner.zenwinks.fr`, servie depuis le VPS de
 Lucas par Coolify. Jusqu'en octobre 2026, l'app tournait sur Vercel avec
 Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
@@ -17,6 +24,26 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 - **Le front** (`src/`) : Vue 3 + Vite, PWA (vite-plugin-pwa). `src/api.js`
   parle au serveur ; les soldes se calculent dans le navigateur
   (`src/composables/useBalance.js`).
+
+### Le front
+
+| Fichier | Rôle |
+| --- | --- |
+| `src/style.css` | la base visuelle : couleurs des deux thèmes (variables CSS), boutons, champs, cartes, contrôles segmentés |
+| `public/theme-init.js` | pose le thème choisi avant le premier affichage (un fichier à part : la CSP n'admet pas de script dans la page) |
+| `src/dashboard.js` | ce que montre le tableau de bord : les deux soldes par mois, les congés d'un seul tenant, le prochain congé, les jours en attente (fonctions pures, `tests/dashboard.test.js`) |
+| `views/Dashboard.vue` | le résumé, le choix prévisionnel / confirmé, la liste des mois |
+| `components/TimeOffSheet.vue` | poser ou modifier un congé : calendrier avec les jours posés et les fériés, effet sur le solde de fin d'année, alertes |
+| `components/EntrySheet.vue` | un congé ouvert depuis sa puce : statut en un geste, modifier, supprimer (avec « Annuler ») |
+| `components/BottomSheet.vue` | un panneau sur un `<dialog>` natif : monté du bas sur mobile, au centre sur ordinateur |
+
+- **La couleur dit le type** (CP en indigo, RTT en sarcelle), **l'icône et le
+  style disent le statut** : plein et coché pour accepté, hachuré et cadenas
+  pour imposé, teinté avec une horloge pour demandé, en pointillé pour brouillon.
+  Rien ne repose sur la couleur seule ; les textes visent un contraste AA dans
+  les deux thèmes.
+- **Un congé à cheval sur deux mois** apparaît dans chacun, mais s'ouvre, se
+  modifie et se supprime en entier.
 
 ### Connexion et cloisonnement
 
@@ -54,6 +81,7 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 | `GET` / `PUT /api/settings` | les paramètres ; avec `yearly_rtt`, le `PUT` remplace aussi la liste des RTT par année, dans la même transaction |
 | `GET /api/yearly-rtt` | les RTT par année, triés |
 | `GET` / `POST` / `DELETE /api/entries` | les jours posés : lire, poser, retirer (tout ou rien) |
+| `PATCH /api/entries` | changer le statut de tous les jours d'un congé, d'un coup |
 | `POST /api/entries/replace` | modifier un congé : ses anciens jours remplacés par les nouveaux, tout ou rien |
 | `GET /auth/google`, `GET /auth/callback` | la connexion avec Google |
 | `POST /auth/logout` | la déconnexion de l'appareil |
@@ -73,7 +101,7 @@ cp .env.example .env    # puis GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET
 npm install
 npm run dev:server      # l'API, sur http://localhost:3000
 npm run dev             # la PWA, sur http://localhost:5173 (relaie /api et /auth)
-npm test                # serveur et cloisonnement entre comptes
+npm test                # serveur, cloisonnement entre comptes, calculs du tableau de bord
 npm run test:e2e        # parcours dans le navigateur, sur ordinateur et sur mobile
 ```
 

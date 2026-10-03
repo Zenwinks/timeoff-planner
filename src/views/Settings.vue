@@ -1,7 +1,11 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { api, getCurrentUser } from '../api'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { api, getCurrentUser } from '../api'
+import AppHeader from '../components/AppHeader.vue'
+import AppIcon from '../components/AppIcon.vue'
+import SegmentedControl from '../components/SegmentedControl.vue'
+import { themeChoice } from '../composables/useTheme'
 import { HOLIDAY_KEYS } from '../holidays'
 
 const router = useRouter()
@@ -34,6 +38,13 @@ const newRttYearError = computed(() => {
   if (yearlyRtt.value.find(r => r.year === newRttYear.value)) return 'Cette année est déjà configurée'
   return null
 })
+
+// L'apparence vaut pour cet appareil, tout de suite : rien à enregistrer.
+const themeOptions = [
+  { value: 'system', label: 'Système', icon: 'monitor' },
+  { value: 'light', label: 'Clair', icon: 'sun' },
+  { value: 'dark', label: 'Sombre', icon: 'moon' },
+]
 
 async function load() {
   loading.value = true
@@ -87,7 +98,7 @@ function invalidField() {
     ['Année de départ', form.value.start_year],
     ['Congés initiaux', form.value.initial_conges],
     ['RTT initiaux', form.value.initial_rtt],
-    ['Incrément congés / mois', form.value.conges_increment_per_month],
+    ['Acquisition par mois', form.value.conges_increment_per_month],
     ...yearlyRtt.value.map(r => [`RTT ${r.year}`, r.rtt_count]),
   ].find(([, value]) => !isNumber(value))?.[0] ?? null
 }
@@ -114,6 +125,11 @@ async function save() {
   router.push('/')
 }
 
+async function logout() {
+  await api.logout()
+  router.push('/login')
+}
+
 async function deleteAccount() {
   deleting.value = true
   deleteError.value = null
@@ -128,460 +144,338 @@ async function deleteAccount() {
 </script>
 
 <template>
-  <div v-if="loadError" class="loading">
-    <p>Impossible de charger vos paramètres.</p>
-    <p class="load-error-detail">{{ loadError }}</p>
-    <button type="button" class="btn-save" @click="load">Réessayer</button>
-  </div>
-  <div class="settings" v-else-if="!loading">
-    <div class="settings-card">
-      <h1>Paramètres</h1>
-      <p class="subtitle">Configurez votre période de référence et vos soldes initiaux</p>
+  <AppHeader />
 
-      <form @submit.prevent="save">
-        <div class="form-group">
-          <label for="settings-start-year">Année de départ</label>
-          <input id="settings-start-year" type="number" v-model.number="form.start_year" :min="new Date().getFullYear() - 2" :max="new Date().getFullYear() + 2" />
-          <small class="hint">Le calcul démarre en janvier de cette année</small>
-        </div>
+  <main class="page">
+    <div v-if="loadError" class="state">
+      <p>Impossible de charger vos paramètres.</p>
+      <p class="state-detail">{{ loadError }}</p>
+      <button type="button" class="btn btn-primary" @click="load">Réessayer</button>
+    </div>
+    <div v-else-if="loading" class="state" aria-busy="true">Chargement…</div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label for="settings-initial-conges">Congés initiaux</label>
-            <input id="settings-initial-conges" type="number" v-model.number="form.initial_conges" step="0.01" min="0" />
-            <small class="hint">Solde CP reporté depuis l'année N-1</small>
+    <template v-else>
+      <div class="page-title">
+        <router-link v-if="!isNew" to="/" class="back">
+          <AppIcon name="chevron-left" :size="18" />
+          Tableau de bord
+        </router-link>
+        <h1>{{ isNew ? 'Bienvenue !' : 'Paramètres' }}</h1>
+        <p v-if="isNew" class="intro">Indiquez vos soldes de départ : l’app calcule ensuite vos soldes mois par mois.</p>
+      </div>
+
+      <form class="settings-form" @submit.prevent="save">
+        <section class="card section" aria-labelledby="section-balances">
+          <h2 id="section-balances">Soldes de départ</h2>
+          <div class="grid">
+            <div class="field">
+              <label class="field-label" for="settings-start-year">Année de départ</label>
+              <input id="settings-start-year" v-model.number="form.start_year" class="input" type="number" :min="new Date().getFullYear() - 2" :max="new Date().getFullYear() + 2" />
+              <span class="field-hint">Le calcul démarre en janvier de cette année.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="settings-increment">Acquisition par mois</label>
+              <input id="settings-increment" v-model.number="form.conges_increment_per_month" class="input" type="number" step="0.01" min="0" />
+              <span class="field-hint">CP acquis chaque mois. Par défaut 2,08 (25 jours par an).</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="settings-initial-conges">Congés initiaux</label>
+              <input id="settings-initial-conges" v-model.number="form.initial_conges" class="input" type="number" step="0.01" min="0" />
+              <span class="field-hint">Solde CP reporté de l’année précédente.</span>
+            </div>
+            <div class="field">
+              <label class="field-label" for="settings-initial-rtt">RTT initiaux</label>
+              <input id="settings-initial-rtt" v-model.number="form.initial_rtt" class="input" type="number" step="0.01" min="0" />
+              <span class="field-hint">Solde RTT reporté : seules les décimales passent d’une année à l’autre.</span>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="settings-initial-rtt">RTT initiaux</label>
-            <input id="settings-initial-rtt" type="number" v-model.number="form.initial_rtt" step="0.01" min="0" />
-            <small class="hint">Solde RTT reporté depuis l'année N-1 (décimales uniquement)</small>
+        </section>
+
+        <section class="card section" aria-labelledby="section-rtt">
+          <h2 id="section-rtt">RTT par année</h2>
+          <p class="section-hint">Les RTT accordés chaque année, ajoutés au solde en janvier.</p>
+          <ul v-if="yearlyRtt.length" class="rtt-list">
+            <li v-for="item in yearlyRtt" :key="item.year" class="rtt-row">
+              <span class="rtt-year num">{{ item.year }}</span>
+              <input v-model.number="item.rtt_count" class="input rtt-input" type="number" step="0.01" min="0" :aria-label="`RTT ${item.year}`" />
+              <button type="button" class="btn btn-ghost btn-icon" :aria-label="`Retirer ${item.year}`" :title="`Retirer ${item.year}`" @click="removeRttYear(item)">
+                <AppIcon name="trash" :size="18" />
+              </button>
+            </li>
+          </ul>
+          <p v-else class="section-hint">Aucune année configurée.</p>
+          <div class="rtt-add">
+            <input v-model.number="newRttYear" class="input rtt-year-input" :class="{ invalid: newRttYearError }" type="number" :min="form.start_year" aria-label="Nouvelle année" />
+            <input v-model.number="newRttCount" class="input rtt-input" type="number" step="0.01" min="0" aria-label="RTT de la nouvelle année" />
+            <button type="button" class="btn btn-secondary" :disabled="!!newRttYearError" @click="addRttYear">
+              <AppIcon name="plus" :size="18" />
+              Ajouter
+            </button>
           </div>
-        </div>
+          <p v-if="newRttYearError" class="error-text">{{ newRttYearError }}</p>
+        </section>
 
-        <div class="form-group">
-          <label for="settings-increment">Incrément congés / mois</label>
-          <input id="settings-increment" type="number" v-model.number="form.conges_increment_per_month" step="0.01" min="0" />
-          <small class="hint">Par défaut 2,08 (≈ 25 jours / 12 mois)</small>
-        </div>
-
-        <div class="form-group">
-          <label for="settings-solidarite">Journée de solidarité</label>
-          <select id="settings-solidarite" v-model="form.journee_solidarite">
-            <option :value="null">Aucune</option>
-            <option v-for="h in HOLIDAY_KEYS" :key="h.key" :value="h.key">
-              {{ h.label }}
-            </option>
-          </select>
-          <small class="hint">Ce jour férié sera travaillé et compté comme jour ouvré</small>
-        </div>
-
-        <div class="section-title">RTT par année</div>
-        <p class="hint rtt-hint">Les RTT accordés chaque année, enregistrés avec le reste.</p>
-        <div class="rtt-list">
-          <div v-for="item in yearlyRtt" :key="item.year" class="rtt-row">
-            <span class="rtt-year">{{ item.year }}</span>
-            <input
-              type="number"
-              v-model.number="item.rtt_count"
-              step="0.01"
-              min="0"
-              class="rtt-input"
-              :aria-label="`RTT ${item.year}`"
-            />
-            <button type="button" class="btn-remove" :aria-label="`Retirer ${item.year}`" :title="`Retirer ${item.year}`" @click="removeRttYear(item)">&times;</button>
+        <section class="card section" aria-labelledby="section-holidays">
+          <h2 id="section-holidays">Jours fériés</h2>
+          <div class="field">
+            <label class="field-label" for="settings-solidarite">Journée de solidarité</label>
+            <select id="settings-solidarite" v-model="form.journee_solidarite" class="select">
+              <option :value="null">Aucune</option>
+              <option v-for="h in HOLIDAY_KEYS" :key="h.key" :value="h.key">{{ h.label }}</option>
+            </select>
+            <span class="field-hint">Ce jour férié est travaillé : il compte comme un jour ouvré.</span>
           </div>
-          <div v-if="yearlyRtt.length === 0" class="rtt-empty">Aucune année configurée</div>
-        </div>
-        <div class="rtt-add">
-          <input type="number" v-model.number="newRttYear" :min="form.start_year" class="rtt-year-input" :class="{ 'input-error': newRttYearError }" aria-label="Nouvelle année" />
-          <input type="number" v-model.number="newRttCount" step="0.01" min="0" class="rtt-input" aria-label="RTT de la nouvelle année" />
-          <button type="button" class="btn-add" @click="addRttYear" :disabled="!!newRttYearError">+ Ajouter</button>
-        </div>
-        <p v-if="newRttYearError" class="rtt-year-error">{{ newRttYearError }}</p>
+        </section>
 
-        <p v-if="saveError" class="rtt-year-error">{{ saveError }}</p>
         <div class="form-actions">
-          <router-link to="/" class="btn-cancel" v-if="!isNew">Annuler</router-link>
-          <button type="submit" class="btn-save" :disabled="saving">
-            {{ saving ? 'Enregistrement...' : 'Enregistrer' }}
+          <p v-if="saveError" class="error-text" role="alert">{{ saveError }}</p>
+          <router-link v-if="!isNew" to="/" class="btn btn-secondary">Annuler</router-link>
+          <button type="submit" class="btn btn-primary" :disabled="saving">
+            {{ saving ? 'Enregistrement…' : isNew ? 'Commencer' : 'Enregistrer' }}
           </button>
         </div>
       </form>
 
-      <div class="account">
-        <div class="section-title">Mon compte</div>
-        <p class="account-email" v-if="userEmail">Connecté avec {{ userEmail }}</p>
-        <router-link to="/confidentialite" class="account-link">Vos données personnelles</router-link>
+      <section class="card section" aria-labelledby="section-theme">
+        <h2 id="section-theme">Apparence</h2>
+        <p class="section-hint">Sur cet appareil. « Système » suit le réglage clair ou sombre de l’appareil.</p>
+        <SegmentedControl v-model="themeChoice" class="wide" :options="themeOptions" label="Thème" />
+      </section>
 
-        <button v-if="!confirmingDelete" type="button" class="btn-delete-account" @click="confirmingDelete = true">
-          Supprimer mon compte
-        </button>
-        <div v-else class="delete-confirm">
-          <p>
-            Votre compte, vos paramètres et tous vos congés et RTT seront effacés définitivement.
-            Ce n'est pas réversible.
-          </p>
-          <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
-          <div class="delete-actions">
-            <button type="button" class="btn-cancel" @click="confirmingDelete = false" :disabled="deleting">Annuler</button>
-            <button type="button" class="btn-delete-confirm" @click="deleteAccount" :disabled="deleting">
-              {{ deleting ? 'Suppression...' : 'Supprimer définitivement' }}
-            </button>
+      <section class="card section" aria-labelledby="section-account">
+        <h2 id="section-account">Compte</h2>
+        <p v-if="userEmail" class="account-email">Connecté avec {{ userEmail }}</p>
+        <div class="account-actions">
+          <button type="button" class="btn btn-secondary" @click="logout">
+            <AppIcon name="logout" :size="18" />
+            Se déconnecter
+          </button>
+          <router-link to="/confidentialite" class="account-link">Vos données personnelles</router-link>
+        </div>
+
+        <div class="danger-zone">
+          <button v-if="!confirmingDelete" type="button" class="btn btn-danger-ghost" @click="confirmingDelete = true">
+            <AppIcon name="trash" :size="18" />
+            Supprimer mon compte
+          </button>
+          <div v-else class="delete-confirm">
+            <p>Votre compte, vos paramètres et tous vos congés et RTT seront effacés définitivement. Ce n’est pas réversible.</p>
+            <p v-if="deleteError" class="error-text">{{ deleteError }}</p>
+            <div class="delete-actions">
+              <button type="button" class="btn btn-secondary" :disabled="deleting" @click="confirmingDelete = false">Annuler</button>
+              <button type="button" class="btn btn-danger" :disabled="deleting" @click="deleteAccount">
+                {{ deleting ? 'Suppression…' : 'Supprimer définitivement' }}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-  <div v-else class="loading">Chargement...</div>
+      </section>
+    </template>
+  </main>
 </template>
 
 <style scoped>
-.settings {
+.page {
   display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem 1rem 2.5rem;
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 2rem 1rem;
+  gap: 0.75rem;
+  min-height: 60vh;
+  text-align: center;
+  color: var(--text-muted);
 }
 
-.settings-card {
-  background: #1a1a2e;
-  border-radius: 12px;
-  padding: 2rem;
-  width: 100%;
-  max-width: 500px;
+.state-detail {
+  font-size: 0.85rem;
+  color: var(--text-subtle);
 }
 
-h1 {
-  margin: 0 0 0.25rem;
-}
-
-.subtitle {
-  color: #888;
-  margin: 0 0 1.5rem;
-  font-size: 0.9rem;
-}
-
-.form-row {
+.page-title {
   display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.page-title h1 {
+  font-size: 1.6rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.intro {
+  color: var(--text-muted);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  align-self: flex-start;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
 }
 
-.form-group {
-  flex: 1;
-  margin-bottom: 1.25rem;
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem 1.25rem 1.25rem;
 }
 
-label {
-  display: block;
+.section h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.section-hint {
+  margin-top: -0.55rem;
   font-size: 0.85rem;
-  color: #aaa;
-  margin-bottom: 0.4rem;
+  color: var(--text-subtle);
 }
 
-input, select {
-  width: 100%;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #333;
-  border-radius: 6px;
-  background: #0f0f1e;
-  color: #eee;
-  font-size: 0.95rem;
-  box-sizing: border-box;
+.grid {
+  display: grid;
+  gap: 1rem;
 }
 
-input:focus, select:focus {
-  outline: none;
-  border-color: #646cff;
-}
-
-.hint {
-  display: block;
-  color: #8a8aa0;
-  margin-top: 0.3rem;
-  font-size: 0.8rem;
-}
-
-.section-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #ccc;
-  margin-bottom: 0.75rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid #2a2a40;
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .rtt-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  list-style: none;
 }
 
-.rtt-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.rtt-year {
-  font-weight: 600;
-  min-width: 50px;
-}
-
-.rtt-input {
-  width: 100px !important;
-  flex: none;
-}
-
-.rtt-year-input {
-  width: 80px !important;
-  flex: none;
-}
-
-.rtt-empty {
-  color: #666;
-  font-size: 0.85rem;
-  font-style: italic;
-}
-
-.input-error {
-  border-color: #e74c3c !important;
-}
-
-.rtt-year-error {
-  color: #e74c3c;
-  font-size: 0.8rem;
-  margin: -0.25rem 0 0.75rem;
-}
-
-.btn-add:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
+.rtt-row,
 .rtt-add {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.6rem;
 }
 
-.btn-add {
-  padding: 0.5rem 1rem;
-  border: 1px solid #646cff;
-  border-radius: 6px;
-  background: transparent;
-  color: #646cff;
-  cursor: pointer;
+.rtt-year {
+  min-width: 3.5rem;
+  font-weight: 700;
+}
+
+.rtt-input {
+  width: 7rem;
+}
+
+.rtt-year-input {
+  width: 6.5rem;
+}
+
+/* Sur un téléphone, les deux champs se partagent la place laissée par le bouton. */
+@media (max-width: 519px) {
+  .rtt-add .input {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+
+  .rtt-add .btn {
+    flex-shrink: 0;
+  }
+}
+
+.error-text {
   font-size: 0.85rem;
-  white-space: nowrap;
+  color: var(--danger);
 }
 
-.btn-add:hover {
-  background: #646cff;
-  color: #fff;
-}
-
-.btn-remove {
-  padding: 0.3rem 0.6rem;
-  border: 1px solid #e74c3c;
-  border-radius: 6px;
-  background: transparent;
-  color: #e74c3c;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.btn-remove:hover {
-  background: #e74c3c;
-  color: #fff;
-}
-
+/* Les boutons d'enregistrement : collés en bas de l'écran sur mobile, pour
+   rester à portée après avoir fait défiler les sections. */
 .form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.btn-save {
-  padding: 0.6rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  background: #646cff;
-  color: #fff;
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-.btn-save:hover {
-  background: #535bf2;
-}
-
-.btn-save:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-cancel {
-  padding: 0.6rem 1.5rem;
-  border: 1px solid #444;
-  border-radius: 6px;
-  color: #ccc;
-  text-decoration: none;
-  font-size: 0.95rem;
-}
-
-.btn-cancel:hover {
-  border-color: #666;
-}
-
-.loading {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
-  min-height: 100vh;
-  padding: 1rem;
-  color: #888;
-  text-align: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 0 -1rem;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
 }
 
-.load-error-detail {
-  font-size: 0.85rem;
-  color: #777;
+.form-actions .error-text {
+  flex-basis: 100%;
+  text-align: right;
 }
 
-.rtt-hint {
-  margin: -0.4rem 0 0.75rem;
-}
-
-.account {
-  margin-top: 2rem;
+@media (min-width: 760px) {
+  .form-actions {
+    position: static;
+    margin: 0;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    border-top: none;
+  }
 }
 
 .account-email {
-  color: #aaa;
-  font-size: 0.85rem;
-  margin-bottom: 0.5rem;
+  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+}
+
 .account-link {
-  display: inline-block;
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
+  font-weight: 600;
 }
 
-.btn-delete-account {
-  display: block;
-  padding: 0.5rem 1rem;
-  border: 1px solid #e74c3c;
-  border-radius: 6px;
-  background: transparent;
-  color: #e74c3c;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.btn-delete-account:hover {
-  background: #e74c3c;
-  color: #fff;
+.danger-zone {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
 }
 
 .delete-confirm {
-  border: 1px solid #e74c3c;
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   padding: 1rem;
-  background: rgba(231, 76, 60, 0.08);
-  font-size: 0.85rem;
-  color: #ddd;
-}
-
-.delete-error {
-  color: #e74c3c;
-  margin-top: 0.5rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  font-size: 0.9rem;
 }
 
 .delete-actions {
   display: flex;
-  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.delete-actions .btn-cancel {
-  background: transparent;
-  cursor: pointer;
-}
-
-.btn-delete-confirm {
-  padding: 0.6rem 1.25rem;
-  border: none;
-  border-radius: 6px;
-  background: #e74c3c;
-  color: #fff;
-  cursor: pointer;
-  font-size: 0.95rem;
-}
-
-.btn-delete-confirm:disabled,
-.delete-actions .btn-cancel:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-@media (max-width: 480px) {
-  .settings {
-    padding: 1rem 0.5rem;
-  }
-
-  .settings-card {
-    padding: 1.25rem;
-    border-radius: 10px;
-  }
-
-  h1 {
-    font-size: 1.3rem;
-  }
-
-  .subtitle {
-    font-size: 0.8rem;
-    margin-bottom: 1rem;
-  }
-
-  .form-row {
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .rtt-add {
-    flex-wrap: wrap;
-  }
-
-  .rtt-year-input {
-    width: 70px !important;
-  }
-
-  .rtt-input {
-    width: 80px !important;
-  }
-
-  .btn-add {
-    font-size: 0.8rem;
-    padding: 0.45rem 0.75rem;
-  }
-
-  .form-actions {
-    flex-direction: column;
-  }
-
-  .btn-save,
-  .btn-cancel {
-    width: 100%;
-    text-align: center;
-  }
+  justify-content: flex-end;
+  gap: 0.6rem;
 }
 </style>

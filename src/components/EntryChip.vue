@@ -1,150 +1,125 @@
 <script setup>
 import { computed } from 'vue'
-import { formatPeriod } from '../format'
+import AppIcon from './AppIcon.vue'
+import { statusIcons, statusLabels, typeLabels } from '../constants'
+import { formatDays, formatPeriod } from '../format'
 
+// La part d'un congé posée dans un mois. Sa couleur dit le type (CP ou RTT),
+// son style et son icône le statut. Un clic ouvre le congé entier.
 const props = defineProps({
   group: { type: Object, required: true },
   dimmed: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['delete', 'edit'])
+const emit = defineEmits(['open'])
 
-// « CP du 27 au 31 juillet » : ce que disent les boutons aux lecteurs d'écran
-// et au survol, les icônes seules ne disant rien.
-const label = computed(() =>
-  `${props.group.type === 'conge' ? 'CP' : 'RTT'} ${formatPeriod(props.group.startDate, props.group.endDate)}`)
+const days = computed(() => props.group.entries.reduce((n, e) => n + (Number(e.duration) || 1), 0))
+const dates = computed(() =>
+  props.group.startDay === props.group.endDay ? String(props.group.startDay) : `${props.group.startDay} → ${props.group.endDay}`)
+
+// « CP du 27 au 31 juillet, accepté, 5 jours » : ce que lisent les lecteurs d'écran.
+const label = computed(() => {
+  const length = days.value === 0.5 ? 'une demi-journée' : `${formatDays(days.value)} jour${days.value > 1 ? 's' : ''}`
+  return `${typeLabels[props.group.type]} ${formatPeriod(props.group.startDate, props.group.endDate)}, ${statusLabels[props.group.status].toLowerCase()}, ${length}`
+})
 </script>
 
 <template>
-  <div class="entry-chip" :class="{ dimmed }">
-    <span class="chip" :class="[group.type, 'status-' + group.status]">
-      <span class="chip-type">{{ group.type === 'conge' ? 'CP' : 'RTT' }}</span>
-      <span class="chip-dates">
-        <template v-if="group.startDay === group.endDay">
-          {{ group.startDay }}
-        </template>
-        <template v-else>
-          {{ group.startDay }}&rarr;{{ group.endDay }}
-        </template>
-      </span>
-      <span v-if="group.duration === 0.5" class="chip-half">½j</span>
-    </span>
-    <button type="button" class="chip-edit" :aria-label="`Modifier ${label}`" :title="`Modifier ${label}`" @click="emit('edit', group)">✎</button>
-    <button type="button" class="chip-delete" :aria-label="`Supprimer ${label}`" :title="`Supprimer ${label}`" @click="emit('delete', group)">&times;</button>
-  </div>
+  <button
+    type="button"
+    class="chip"
+    :class="[group.type, group.status, { dimmed }]"
+    :aria-label="label"
+    :title="label"
+    @click="emit('open', group)"
+  >
+    <AppIcon :name="statusIcons[group.status]" :size="14" />
+    <span class="chip-type">{{ typeLabels[group.type] }}</span>
+    <span class="chip-dates num">{{ dates }}</span>
+    <span v-if="group.duration === 0.5" class="chip-extra">½ j</span>
+    <span v-else-if="days > 1" class="chip-extra num">{{ formatDays(days) }} j</span>
+  </button>
 </template>
 
 <style scoped>
-.entry-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  transition: opacity 0.2s;
-}
-
-.entry-chip.dimmed {
-  opacity: 0.2;
-}
-
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  overflow: hidden;
-  border: none;
+  gap: 0.3rem;
+  min-height: 30px;
+  padding: 0.2rem 0.65rem 0.2rem 0.5rem;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 650;
   line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.2s, filter 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Le type : la couleur. */
+.chip.conge {
+  --chip: var(--cp);
+  --chip-strong: var(--cp-strong);
+  --chip-soft: var(--cp-soft);
+}
+
+.chip.rtt {
+  --chip: var(--rtt);
+  --chip-strong: var(--rtt-strong);
+  --chip-soft: var(--rtt-soft);
+}
+
+/* Le statut : le remplissage et l'icône. Acquis : plein. Demandé : teinté et
+   bordé. Brouillon : seulement un pointillé. Imposé : plein et hachuré. */
+.chip.accepte,
+.chip.impose {
+  background-color: var(--chip-strong);
+  color: #ffffff;
+}
+
+.chip.impose {
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(255, 255, 255, 0.14) 5px 10px);
+}
+
+.chip.demande {
+  background: var(--chip-soft);
+  border-color: var(--chip);
+  color: var(--chip);
+}
+
+.chip.brouillon {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--chip);
+  color: var(--chip);
+}
+
+.chip:hover {
+  filter: brightness(1.12);
+}
+
+.chip.dimmed {
+  opacity: 0.25;
 }
 
 .chip-type {
-  padding: 0.2rem 0.3rem;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
-.chip.conge .chip-type {
-  background: #646cff;
+.chip-extra {
+  font-size: 0.72rem;
+  font-weight: 500;
+  opacity: 0.85;
 }
 
-.chip.rtt .chip-type {
-  background: #e6a23c;
-}
-
-.chip-dates {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.35rem;
-  color: #eee;
-}
-
-.chip.status-brouillon .chip-dates {
-  background: rgba(136, 136, 136, 0.2);
-  color: #bbb;
-}
-
-.chip.status-demande .chip-dates {
-  background: rgba(240, 173, 78, 0.2);
-  color: #f0c078;
-}
-
-.chip.status-accepte .chip-dates {
-  background: rgba(92, 184, 92, 0.2);
-  color: #7ddb7d;
-}
-
-.chip.status-impose .chip-dates {
-  background: rgba(198, 120, 221, 0.2);
-  color: #d8a0e8;
-}
-
-.chip-half {
-  padding: 0.2rem 0.3rem;
-  font-size: 0.55rem;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.08);
-  color: #aaa;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.chip-edit,
-.chip-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  min-height: 24px;
-  background: none;
-  border: none;
-  border-radius: 4px;
-  color: #8a8aa0;
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-  transition: color 0.15s;
-}
-
-.chip-edit {
-  font-size: 0.75rem;
-}
-
-.chip-edit:hover {
-  color: #8a8fff;
-}
-
-.chip-delete {
-  font-size: 0.95rem;
-}
-
-.chip-edit:focus-visible,
-.chip-delete:focus-visible {
-  outline: 2px solid #646cff;
-}
-
-.chip-delete:hover {
-  color: #e74c3c;
+@media (pointer: coarse) {
+  .chip {
+    min-height: 34px;
+  }
 }
 </style>
