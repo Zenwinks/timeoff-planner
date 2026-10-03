@@ -44,6 +44,11 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
   les deux thèmes.
 - **Un congé à cheval sur deux mois** apparaît dans chacun, mais s'ouvre, se
   modifie et se supprime en entier.
+- **Les mises à jour arrivent seules** : à l'ouverture de l'app, le service
+  worker récupère une version déployée entre-temps, et la page se recharge dès
+  qu'elle prend la main (`src/main.js`). `injectRegister` doit rester à `auto`
+  dans `vite.config.js` : c'est lui qui fait passer la nouvelle version tout de
+  suite ; à `false`, elle attendrait indéfiniment.
 
 ### Connexion et cloisonnement
 

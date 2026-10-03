@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
+      // L'app enregistre elle-même le service worker (src/main.js), et se
+      // recharge quand une nouvelle version prend la main. injectRegister
+      // reste à 'auto' : c'est lui qui fait passer la nouvelle version tout de
+      // suite (skipWaiting, clientsClaim). À false, elle attendrait pour
+      // toujours ; et le module importé suffit à ce qu'aucun script ne soit ajouté.
       registerType: 'autoUpdate',
       manifest: {
         name: 'TimeOff Planner',
