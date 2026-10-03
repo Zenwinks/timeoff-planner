@@ -74,6 +74,7 @@ function halfClass(entry) {
             type="button"
             class="day taken num"
             :class="[day.entry.type, day.entry.status, halfClass(day.entry), { today: day.today, dimmed: highlighted && highlighted !== day.entry.status }]"
+            :aria-current="day.today ? 'date' : undefined"
             :aria-label="entryLabel(day)"
             :title="entryLabel(day)"
             @click="emit('open', day.entry)"
@@ -82,6 +83,7 @@ function halfClass(entry) {
             v-else-if="day.weekend || day.holiday"
             class="day off num"
             :class="{ holiday: day.holiday, today: day.today }"
+            :aria-current="day.today ? 'date' : undefined"
             :title="day.holiday ? `Férié : ${day.holiday}` : undefined"
           >{{ day.day }}</span>
           <button
@@ -89,6 +91,7 @@ function halfClass(entry) {
             type="button"
             class="day free num"
             :class="{ today: day.today }"
+            :aria-current="day.today ? 'date' : undefined"
             :aria-label="`${day.name} : libre. Poser un congé`"
             @click="emit('pick', day.iso)"
           >{{ day.day }}</button>
@@ -168,9 +171,16 @@ button.day {
   box-shadow: inset 0 -3px 0 -1px var(--warning);
 }
 
+/* Aujourd'hui : un cerne de la couleur du texte, qu'aucun type ni le focus
+   n'emploient, pour ne pas le prendre pour un CP demandé. */
 .day.today {
-  outline: 2px solid var(--focus);
+  outline: 2px solid var(--text);
   outline-offset: 1px;
+}
+
+.day.today:focus-visible {
+  outline-color: var(--focus);
+  outline-offset: 2px;
 }
 
 /* Le type : la couleur. Le statut : le remplissage (--fill) et l'encre (--ink),

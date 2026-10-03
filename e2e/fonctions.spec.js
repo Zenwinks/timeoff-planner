@@ -41,6 +41,8 @@ test('l’année en calendrier : un jour posé ouvre son congé, un jour libre e
   await showYear(page)
   await expect(day(page, 'Vendredi 30 octobre : RTT, demandé')).toBeVisible()
   await expect(day(page, 'Vendredi 13 novembre : RTT, brouillon, l’après-midi')).toBeVisible()
+  await expect(page.locator('.year [aria-current="date"]')).toHaveCount(1)
+  await expect(day(page, 'Lundi 5 octobre : libre. Poser un congé')).toHaveAttribute('aria-current', 'date')
 
   await day(page, 'Vendredi 30 octobre : RTT, demandé').click()
   await expect(sheet(page).getByRole('heading', { name: 'RTT le 30 octobre' })).toBeVisible()
