@@ -18,6 +18,8 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   // Le congé modifié (une période de periodsOf), ou null pour en poser un.
   editing: { type: Object, default: null },
+  // Pour un congé à poser : un jour déjà choisi (AAAA-MM-JJ), cliqué dans le calendrier de l'année.
+  startDate: { type: String, default: null },
   // Tous les jours posés : repères du calendrier et dates déjà prises.
   entries: { type: Array, default: () => [] },
   checkBalance: { type: Function, required: true },
@@ -32,9 +34,13 @@ const range = ref(null)
 const type = ref('conge')
 const status = ref('brouillon')
 const duration = ref(1)
+// Le moment d'une demi-journée : 'matin', 'apres-midi', ou null (non précisé).
+const halfDay = ref('matin')
 
 const typeOptions = [{ value: 'conge', label: 'Congés payés' }, { value: 'rtt', label: 'RTT' }]
 const durationOptions = [{ value: 1, label: 'Journée entière' }, { value: 0.5, label: 'Demi-journée' }]
+const halfDayOptions = [{ value: 'matin', label: 'Matin' }, { value: 'apres-midi', label: 'Après-midi' }]
+const halfDayLabels = { matin: 'matin', 'apres-midi': 'après-midi' }
 const statusOptions = Object.entries(statusLabels).map(([value, label]) => ({ value, label, icon: statusIcons[value] }))
 
 // À chaque ouverture, le congé modifié ou un formulaire vierge : rien ne reste
@@ -44,10 +50,13 @@ watch(() => props.open, open => {
 }, { immediate: true })
 
 function load(period) {
-  range.value = period ? [new Date(`${period.startDate}T00:00`), new Date(`${period.endDate}T00:00`)] : null
+  const [from, to] = period ? [period.startDate, period.endDate] : [props.startDate, props.startDate]
+  range.value = from ? [new Date(`${from}T00:00`), new Date(`${to}T00:00`)] : null
   type.value = period?.type ?? 'conge'
   status.value = period?.status ?? 'brouillon'
   duration.value = period?.duration ?? 1
+  // Une demi-journée d'avant octobre 2026 n'a pas de moment : on le laisse vide.
+  halfDay.value = period ? period.halfDay : 'matin'
 }
 
 /** Le premier et le dernier jour choisis, ou null. */
@@ -62,6 +71,11 @@ const isSingleDay = computed(() => !!bounds.value && formatDate(bounds.value[0])
 
 // La demi-journée ne vaut que pour un jour seul : une période se pose en
 // journées entières.
+// Une journée entière devenue demi-journée : le matin, sauf autre choix.
+watch(duration, (now, before) => {
+  if (now === 0.5 && before === 1 && halfDay.value === null) halfDay.value = 'matin'
+})
+
 watch(isSingleDay, single => {
   if (!single) duration.value = 1
 })
@@ -99,7 +113,7 @@ const periodText = computed(() => {
 const daysText = computed(() => {
   const n = selection.value?.free ?? 0
   if (!n) return ''
-  if (duration.value === 0.5) return 'Une demi-journée'
+  if (duration.value === 0.5) return `Une demi-journée${{ matin: ', le matin', 'apres-midi': ', l’après-midi' }[halfDay.value] ?? ''}`
   return `${n} jour${n > 1 ? 's' : ''} ouvré${n > 1 ? 's' : ''}`
 })
 
@@ -123,7 +137,14 @@ const submitLabel = computed(() => {
 
 function submit() {
   if (!canSubmit.value) return
-  emit('submit', { dateRange: bounds.value, type: type.value, status: status.value, duration: duration.value, editing: props.editing })
+  emit('submit', {
+    dateRange: bounds.value,
+    type: type.value,
+    status: status.value,
+    duration: duration.value,
+    halfDay: duration.value === 0.5 ? halfDay.value : null,
+    editing: props.editing,
+  })
 }
 
 function disabledDates(date) {
@@ -139,7 +160,7 @@ const markers = computed(() => {
     date: new Date(`${e.date}T00:00`),
     type: 'dot',
     color: color(e.type),
-    tooltip: [{ text: `${typeLabels[e.type]} · ${statusLabels[e.status].toLowerCase()}${e.duration === 0.5 ? ' · ½ j' : ''}`, color: color(e.type) }],
+    tooltip: [{ text: `${typeLabels[e.type]} · ${statusLabels[e.status].toLowerCase()}${e.duration === 0.5 ? ` · ${halfDayLabels[e.half_day] ?? '½ j'}` : ''}`, color: color(e.type) }],
   }))
   const year = new Date().getFullYear()
   const holidays = holidaysBetween(year - 1, year + 2).map(h => ({
@@ -197,6 +218,10 @@ const markers = computed(() => {
           <div v-if="isSingleDay" class="field">
             <span class="field-label">Durée</span>
             <SegmentedControl v-model="duration" class="wide" :options="durationOptions" label="Durée" />
+          </div>
+          <div v-if="isSingleDay && duration === 0.5" class="field">
+            <span class="field-label">Moment</span>
+            <SegmentedControl v-model="halfDay" class="wide" :options="halfDayOptions" label="Moment" />
           </div>
           <div class="field">
             <span class="field-label">Statut</span>

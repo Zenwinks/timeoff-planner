@@ -29,7 +29,8 @@ const title = computed(() => {
 const facts = computed(() => {
   const p = props.period
   if (!p) return ''
-  const length = p.duration === 0.5 ? 'Une demi-journée' : `${formatDays(p.days)} jour${p.days > 1 ? 's' : ''} ouvré${p.days > 1 ? 's' : ''}`
+  const moment = { matin: ', le matin', 'apres-midi': ', l’après-midi' }[p.halfDay] ?? ''
+  const length = p.duration === 0.5 ? `Une demi-journée${moment}` : `${formatDays(p.days)} jour${p.days > 1 ? 's' : ''} ouvré${p.days > 1 ? 's' : ''}`
   return `${p.type === 'conge' ? 'Congés payés' : 'RTT'} · ${length}`
 })
 

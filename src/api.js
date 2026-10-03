@@ -55,6 +55,11 @@ export const api = {
   // Un congé modifié : ses jours `ids` remplacés par `entries`, tout ou rien.
   replaceEntries: (ids, entries) => request('POST', '/api/entries/replace', { ids, entries }),
 
+  // Le lien d'abonnement à l'agenda : l'adresse ne se lit qu'à sa création.
+  getCalendarFeed: () => request('GET', '/api/calendar-feed'),
+  createCalendarFeed: () => request('POST', '/api/calendar-feed'),
+  deleteCalendarFeed: () => request('DELETE', '/api/calendar-feed'),
+
   async logout() {
     await request('POST', '/auth/logout')
     forgetCurrentUser()

@@ -2,13 +2,21 @@
 // l'app. Un déploiement qui apporte une migration n'a rien d'autre à faire.
 
 import { createServer } from 'node:http'
+import { dirname, join, resolve } from 'node:path'
 import { createApp } from './app.js'
 import { loadConfig } from './config.js'
-import { migrate, openDb } from './db.js'
+import { migrate, openDb, pruneBackups } from './db.js'
 
 const config = loadConfig()
 const db = openDb(config.databasePath)
-for (const name of migrate(db, config.migrationsDir)) console.log(`[base] migration appliquée : ${name}`)
+
+// Les copies d'avant migration, à côté de la base (sur le volume /data en
+// production), gardées 30 jours.
+const backupDir = join(dirname(resolve(config.databasePath)), 'sauvegardes')
+const { applied, backup } = migrate(db, config.migrationsDir, { backupDir })
+if (backup) console.log(`[base] copie de la base avant migration : ${backup}`)
+for (const name of applied) console.log(`[base] migration appliquée : ${name}`)
+for (const name of pruneBackups(backupDir)) console.log(`[base] copie de plus de 30 jours effacée : ${name}`)
 
 const app = createApp({ config, db })
 if (config.loginProblem) console.warn(`[connexion] fermée : ${config.loginProblem}`)

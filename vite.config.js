@@ -34,7 +34,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         // La connexion et l'API sont au serveur : le service worker ne doit
         // pas y répondre index.html à sa place.
-        navigateFallbackDenylist: [/^\/auth\//, /^\/api\//, /^\/healthz$/],
+        navigateFallbackDenylist: [/^\/auth\//, /^\/api\//, /^\/calendar\//, /^\/healthz$/],
       },
     }),
   ],

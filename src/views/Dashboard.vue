@@ -10,6 +10,7 @@ import SegmentedControl from '../components/SegmentedControl.vue'
 import StatusLegend from '../components/StatusLegend.vue'
 import SummaryCards from '../components/SummaryCards.vue'
 import TimeOffSheet from '../components/TimeOffSheet.vue'
+import YearCalendar from '../components/YearCalendar.vue'
 import { getWorkingDaysInRange, useBalance } from '../composables/useBalance'
 import { showToast } from '../composables/useToasts'
 import { statusLabels } from '../constants'
@@ -27,22 +28,26 @@ const loadError = ref(null)
 const { monthlyRecap, confirmedRecap, checkNegativeBalance, previewYearEnd } = useBalance(settings, yearlyRtt, allEntries)
 
 // ── Les soldes : prévisionnel ou confirmé, au choix, gardé dans ce navigateur ──
-const MODE_KEY = 'timeoff-balance-mode'
-const readMode = () => {
+// Un choix d'affichage, gardé dans ce navigateur (sans stockage : pour la visite).
+function remembered(key, allowed, fallback) {
+  const choice = ref(fallback)
   try {
-    return localStorage.getItem(MODE_KEY) === 'confirmed' ? 'confirmed' : 'forecast'
+    const value = localStorage.getItem(key)
+    if (allowed.includes(value)) choice.value = value
   } catch {
-    return 'forecast'
+    // Stockage indisponible : le choix par défaut.
   }
+  watch(choice, value => {
+    try {
+      localStorage.setItem(key, value)
+    } catch {
+      // Stockage indisponible : le choix vaut pour cette visite.
+    }
+  })
+  return choice
 }
-const mode = ref(readMode())
-watch(mode, value => {
-  try {
-    localStorage.setItem(MODE_KEY, value)
-  } catch {
-    // Stockage indisponible : le choix vaut pour cette visite.
-  }
-})
+
+const mode = remembered('timeoff-balance-mode', ['forecast', 'confirmed'], 'forecast')
 const modeOptions = [
   { value: 'forecast', label: 'Prévisionnel' },
   { value: 'confirmed', label: 'Confirmé' },
@@ -152,7 +157,7 @@ async function deleteOpened() {
 // « Annuler » après une suppression : les mêmes jours, reposés à l'identique.
 async function restore(period) {
   try {
-    await api.addEntries(period.entries.map(({ date, type, status, duration }) => ({ date, type, status, duration })))
+    await api.addEntries(period.entries.map(({ date, type, status, duration, half_day }) => ({ date, type, status, duration, half_day })))
     await refreshEntries()
   } catch (error) {
     showToast({ message: `Impossible de rétablir ce congé : ${error.message}`, tone: 'error' })
@@ -162,13 +167,31 @@ async function restore(period) {
 // ── Poser ou modifier un congé ──
 const formOpen = ref(false)
 const editingPeriod = ref(null)
+const formStartDate = ref(null)
 const saving = ref(false)
 const formError = ref(null)
 
-function openNew() {
+// `date` (AAAA-MM-JJ) : le jour cliqué dans le calendrier de l'année, déjà choisi.
+function openNew(date) {
   editingPeriod.value = null
+  formStartDate.value = typeof date === 'string' ? date : null
   formError.value = null
   formOpen.value = true
+}
+
+// ── Les mois en liste, ou l'année en calendrier ──
+const view = remembered('timeoff-view', ['list', 'calendar'], 'list')
+const viewOptions = [
+  { value: 'list', label: 'Liste', icon: 'list' },
+  { value: 'calendar', label: 'Calendrier', icon: 'calendar' },
+]
+const years = computed(() => [...new Set(months.value.map(m => m.year))])
+const calendarYear = ref(new Date().getFullYear())
+const shownYear = computed(() => (years.value.includes(calendarYear.value) ? calendarYear.value : years.value[0]))
+const yearIndex = computed(() => years.value.indexOf(shownYear.value))
+
+function openEntry(entry) {
+  openPeriod(periodOf(periods.value, entry.id))
 }
 
 function editOpened() {
@@ -178,7 +201,7 @@ function editOpened() {
   formOpen.value = true
 }
 
-async function submitForm({ dateRange, type, status, duration, editing }) {
+async function submitForm({ dateRange, type, status, duration, halfDay, editing }) {
   saving.value = true
   formError.value = null
   try {
@@ -188,7 +211,7 @@ async function submitForm({ dateRange, type, status, duration, editing }) {
     const taken = new Set(allEntries.value.filter(e => !replaced.has(e.id)).map(e => e.date))
     const rows = getWorkingDaysInRange(...dateRange)
       .filter(date => !taken.has(date))
-      .map(date => ({ date, type, status, duration }))
+      .map(date => ({ date, type, status, duration, half_day: halfDay }))
 
     // Modifier, c'est remplacer les jours d'un seul coup : un échec ne perd rien.
     if (editing) await api.replaceEntries([...replaced], rows)
@@ -256,18 +279,37 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
       />
 
       <section class="months-section" aria-labelledby="months-title">
-        <h2 id="months-title">Mois par mois</h2>
-        <button
-          v-if="pastMonths.length"
-          type="button"
-          class="btn btn-ghost past-toggle"
-          :aria-expanded="showPast ? 'true' : 'false'"
-          @click="showPast = !showPast"
-        >
-          <AppIcon :name="showPast ? 'chevron-up' : 'chevron-down'" :size="18" />
-          {{ showPast ? 'Masquer' : 'Afficher' }} les {{ pastMonths.length }} mois passés
-        </button>
-        <MonthList :months="visibleMonths" :mode="mode" :highlighted="highlightedStatus" @open="openGroup" />
+        <div class="months-head">
+          <h2 id="months-title">{{ view === 'list' ? 'Mois par mois' : 'L’année' }}</h2>
+          <SegmentedControl v-model="view" :options="viewOptions" label="Affichage" />
+        </div>
+
+        <template v-if="view === 'list'">
+          <button
+            v-if="pastMonths.length"
+            type="button"
+            class="btn btn-ghost past-toggle"
+            :aria-expanded="showPast ? 'true' : 'false'"
+            @click="showPast = !showPast"
+          >
+            <AppIcon :name="showPast ? 'chevron-up' : 'chevron-down'" :size="18" />
+            {{ showPast ? 'Masquer' : 'Afficher' }} les {{ pastMonths.length }} mois passés
+          </button>
+          <MonthList :months="visibleMonths" :mode="mode" :highlighted="highlightedStatus" @open="openGroup" />
+        </template>
+
+        <template v-else>
+          <div class="year-nav">
+            <button type="button" class="btn btn-ghost btn-icon" aria-label="Année précédente" :disabled="yearIndex <= 0" @click="calendarYear = years[yearIndex - 1]">
+              <AppIcon name="chevron-left" />
+            </button>
+            <span class="year-label num" aria-live="polite">{{ shownYear }}</span>
+            <button type="button" class="btn btn-ghost btn-icon" aria-label="Année suivante" :disabled="yearIndex >= years.length - 1" @click="calendarYear = years[yearIndex + 1]">
+              <AppIcon name="chevron-right" />
+            </button>
+          </div>
+          <YearCalendar :year="shownYear" :entries="allEntries" :highlighted="highlightedStatus" :today="today" @open="openEntry" @pick="openNew" />
+        </template>
       </section>
     </template>
   </main>
@@ -287,6 +329,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
   <TimeOffSheet
     v-model:open="formOpen"
     :editing="editingPeriod"
+    :start-date="formStartDate"
     :entries="allEntries"
     :check-balance="checkNegativeBalance"
     :preview-year-end="previewYearEnd"
@@ -364,6 +407,27 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 .months-section h2 {
   font-size: 1.1rem;
   font-weight: 700;
+}
+
+.months-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+
+.year-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.year-label {
+  min-width: 3.5rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .past-toggle {

@@ -29,6 +29,10 @@ const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
           <strong>La date de création du compte, celle de la dernière connexion et vos sessions</strong> :
           pour vous garder connecté 30 jours sur chaque appareil.
         </li>
+        <li>
+          <strong>Votre lien d’agenda, si vous en créez un</strong> : seulement son empreinte, pour
+          le reconnaître quand votre agenda vient lire vos congés.
+        </li>
       </ul>
 
       <h2>Ce qui n'est pas gardé</h2>
@@ -49,6 +53,11 @@ const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
         Sur un serveur loué chez OVHcloud. Seul Lucas, qui l'administre, y a accès. Rien n'est vendu
         ni partagé ; Google n'intervient qu'au moment de la connexion.
       </p>
+      <p>
+        Si vous créez un lien d’agenda, votre agenda (Google, Outlook, Apple…) lit vos congés par ce
+        lien : quiconque l’a peut les voir. Vous le désactivez ou le remplacez à tout moment, dans les
+        Paramètres.
+      </p>
 
       <h2>Combien de temps</h2>
       <p>
@@ -58,6 +67,10 @@ const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
       <p>
         Les copies de sauvegarde faites lors du changement d'hébergement, en octobre 2026, sont
         gardées en secours quelques mois au plus, puis effacées.
+      </p>
+      <p>
+        Avant chaque évolution de la structure de la base, l’app en fait une copie sur le serveur, au
+        cas où : elle est effacée au bout de 30 jours.
       </p>
 
       <h2>Vos droits</h2>

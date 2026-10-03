@@ -32,7 +32,9 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 | `src/style.css` | la base visuelle : couleurs des deux thèmes (variables CSS), boutons, champs, cartes, contrôles segmentés |
 | `public/theme-init.js` | pose le thème choisi avant le premier affichage (un fichier à part : la CSP n'admet pas de script dans la page) |
 | `src/dashboard.js` | ce que montre le tableau de bord : les deux soldes par mois, les congés d'un seul tenant, le prochain congé, les jours en attente (fonctions pures, `tests/dashboard.test.js`) |
-| `views/Dashboard.vue` | le résumé, le choix prévisionnel / confirmé, la liste des mois |
+| `shared/` | ce que partagent la PWA et le serveur : les jours fériés (sans état : la journée de solidarité se passe en argument) et le regroupement des jours en congés d'un seul tenant |
+| `views/Dashboard.vue` | le résumé, le choix prévisionnel / confirmé, les mois en liste ou l'année en calendrier |
+| `components/YearCalendar.vue` | l'année d'un coup d'œil : un clic sur un jour posé ouvre son congé, sur un jour libre en pose un |
 | `components/TimeOffSheet.vue` | poser ou modifier un congé : calendrier avec les jours posés et les fériés, effet sur le solde de fin d'année, alertes |
 | `components/EntrySheet.vue` | un congé ouvert depuis sa puce : statut en un geste, modifier, supprimer (avec « Annuler ») |
 | `components/BottomSheet.vue` | un panneau sur un `<dialog>` natif : monté du bas sur mobile, au centre sur ordinateur |
@@ -91,6 +93,13 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 | `GET /auth/google`, `GET /auth/callback` | la connexion avec Google |
 | `POST /auth/logout` | la déconnexion de l'appareil |
 | `DELETE /api/account` | la suppression du compte et de toutes ses données |
+| `GET /api/calendar.ics` | les congés au format iCalendar, à importer dans un agenda |
+| `GET` / `POST` / `DELETE /api/calendar-feed` | le lien d'abonnement à l'agenda : savoir s'il existe, en créer un (l'adresse n'est montrée qu'à ce moment-là, et remplace l'ancienne), le désactiver |
+| `GET /calendar/<jeton>.ics` | **sans session** : ce que lit l'agenda abonné. Le jeton (32 octets au hasard) est le secret ; la base n'en garde que l'empreinte SHA-256 |
+
+Un jour posé peut être une demi-journée (`duration` 0,5), le matin ou l'après-midi
+(`half_day` : `matin`, `apres-midi`, ou `null` pour celles posées avant octobre
+2026, sans moment précisé).
 
 `POST /api/yearly-rtt`, `PATCH` et `DELETE /api/yearly-rtt/:id` ne servent plus
 à l'app depuis octobre 2026 : elles restent pour un onglet resté ouvert sur une
@@ -177,6 +186,6 @@ après. Les scripts ne font que le lire.
 | Adresse de retour Google | `https://timeoff-planner.zenwinks.fr/auth/callback` |
 | HTTPS | obligatoire : cookies `Secure` et `__Host-`, HSTS |
 | Proxy | l'app compare l'en-tête `Origin` à `PUBLIC_URL` ; elle n'utilise ni `Host` ni `X-Forwarded-*` |
-| Migrations | appliquées par le serveur au démarrage |
+| Migrations | appliquées par le serveur au démarrage. Avant d'en appliquer une à une base qui a des données, il la copie dans `/data/sauvegardes/` (`VACUUM INTO`, une copie cohérente) ; les copies de plus de 30 jours s'effacent au démarrage |
 | Arrêt | `SIGTERM` : finit les requêtes en cours et ferme la base |
 | Déposer une base migrée | conteneur arrêté : **retirer `timeoff.sqlite-wal` et `timeoff.sqlite-shm`** de la base précédente (SQLite rejouerait sinon son journal sur la nouvelle), copier `timeoff.sqlite` dans le volume (propriétaire `node`, uid 1000), comparer son SHA-256 à celui qu'a affiché la migration, puis démarrer. Les comptes créés sur la base précédente disparaissent avec elle : chacun retrouve le sien, repris de Supabase, par son `sub` |

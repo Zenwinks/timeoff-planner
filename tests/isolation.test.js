@@ -162,6 +162,31 @@ describe('cloisonnement entre comptes', () => {
     assert.equal(bobs.find(e => e.id === bobEntries[0].id).status, 'brouillon', 'le jour de Bob n’a pas bougé non plus')
   })
 
+  test('le lien d’agenda d’un compte ne montre que ses congés, et se révoque', async () => {
+    const aliceFeed = (await t.request('POST', '/api/calendar-feed', { cookie: alice })).json.url
+    const bobFeed = (await t.request('POST', '/api/calendar-feed', { cookie: bob })).json.url
+    assert.notEqual(aliceFeed, bobFeed)
+    // L'agenda lit le lien sans session.
+    const read = async url => t.request('GET', new URL(url).pathname, { origin: null })
+    const aliceIcs = (await read(aliceFeed)).text
+    const bobIcs = (await read(bobFeed)).text
+    assert.match(aliceIcs, /DTSTART;VALUE=DATE:20260302/)
+    assert.match(bobIcs, /DTSTART;VALUE=DATE:20260406/)
+    // Chaque événement porte l'identifiant d'un jour posé : aucun d'Alice chez Bob.
+    for (const entry of aliceEntries) assert.ok(!bobIcs.includes(entry.id), `jour d’Alice ${entry.date} chez Bob`)
+    for (const entry of bobEntries) assert.ok(!aliceIcs.includes(entry.id), `jour de Bob ${entry.date} chez Alice`)
+
+    // Un lien inventé, ou l'ancien après en avoir créé un autre : introuvable.
+    assert.equal((await t.request('GET', `/calendar/${'A'.repeat(43)}.ics`, { origin: null })).status, 404)
+    const newAliceFeed = (await t.request('POST', '/api/calendar-feed', { cookie: alice })).json.url
+    assert.equal((await read(aliceFeed)).status, 404)
+    assert.equal((await read(newAliceFeed)).status, 200)
+    // Bob ne peut pas désactiver le lien d'Alice : DELETE n'agit que sur le sien.
+    await t.request('DELETE', '/api/calendar-feed', { cookie: bob })
+    assert.equal((await read(newAliceFeed)).status, 200)
+    assert.equal((await read(bobFeed)).status, 404)
+  })
+
   test('remplacer ses RTT par année ne touche pas à ceux d’un autre compte', async () => {
     const before = await aliceData()
     const res = await t.request('PUT', '/api/settings', { cookie: bob, body: { ...BOB_SETTINGS, yearly_rtt: [{ year: 2030, rtt_count: 4 }] } })
@@ -174,16 +199,18 @@ describe('cloisonnement entre comptes', () => {
   test('supprimer son compte efface toutes ses données, et rien de celles des autres', async () => {
     const before = await aliceData()
     const bobId = (await t.request('GET', '/api/me', { cookie: bob })).json.id
+    const bobFeed = new URL((await t.request('POST', '/api/calendar-feed', { cookie: bob })).json.url).pathname
 
     const res = await t.request('DELETE', '/api/account', { cookie: bob })
     assert.equal(res.status, 204)
     assert.ok(res.cookies.some(c => c.startsWith('__Host-timeoff_session=;') && c.includes('Max-Age=0')), 'cookie effacé')
 
-    for (const table of ['users', 'sessions', 'user_settings', 'yearly_rtt', 'time_off_entries']) {
+    for (const table of ['users', 'sessions', 'user_settings', 'yearly_rtt', 'time_off_entries', 'calendar_feeds']) {
       const column = table === 'users' ? 'id' : 'user_id'
       assert.equal(t.db.prepare(`select count(*) from ${table} where ${column} = ?`).pluck().get(bobId), 0, `${table} vidée de Bob`)
     }
     assert.equal((await t.request('GET', '/api/me', { cookie: bob })).status, 401, 'sa session ne sert plus')
+    assert.equal((await t.request('GET', bobFeed, { origin: null })).status, 404, 'son lien d’agenda non plus')
     assert.deepEqual(await aliceData(), before)
   })
 })

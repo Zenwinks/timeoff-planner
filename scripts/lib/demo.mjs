@@ -26,7 +26,9 @@ export const DEMO_PERIODS = [
   ['2026-07-27', '2026-08-14', 'conge', 'accepte', 1],
   ['2026-09-18', '2026-09-18', 'rtt', 'accepte', 1],
   ['2026-10-30', '2026-10-30', 'rtt', 'demande', 1],
-  ['2026-11-13', '2026-11-13', 'rtt', 'brouillon', 0.5],
+  // Une demi-journée l'après-midi ; celle du 13 mars n'a pas de moment précisé,
+  // comme toutes celles posées avant octobre 2026.
+  ['2026-11-13', '2026-11-13', 'rtt', 'brouillon', 0.5, 'apres-midi'],
   ['2026-12-21', '2026-12-24', 'conge', 'demande', 1],
   ['2026-12-28', '2026-12-31', 'conge', 'brouillon', 1],
   ['2027-02-15', '2027-02-19', 'conge', 'brouillon', 1],
@@ -52,11 +54,11 @@ export function createDemoAccount(db, { email = 'camille.martin@example.test', s
     }
     // Les jours ouvrés dépendent de la journée de solidarité du compte.
     setSolidarite(s.journee_solidarite)
-    const insert = db.prepare(`insert into time_off_entries (id, user_id, date, type, status, created_at, updated_at, duration)
-      values (?, ?, ?, ?, ?, ?, ?, ?)`)
-    for (const [from, to, type, status, duration] of DEMO_PERIODS) {
+    const insert = db.prepare(`insert into time_off_entries (id, user_id, date, type, status, created_at, updated_at, duration, half_day)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    for (const [from, to, type, status, duration, halfDay = null] of DEMO_PERIODS) {
       for (const date of getWorkingDaysInRange(new Date(`${from}T00:00`), new Date(`${to}T00:00`))) {
-        insert.run(randomUUID(), userId, date, type, status, now, now, duration)
+        insert.run(randomUUID(), userId, date, type, status, now, now, duration, halfDay)
       }
     }
     setSolidarite(null)

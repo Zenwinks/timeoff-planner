@@ -6,6 +6,7 @@ import AppHeader from '../components/AppHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import { themeChoice } from '../composables/useTheme'
+import { showToast } from '../composables/useToasts'
 import { HOLIDAY_KEYS } from '../holidays'
 
 const router = useRouter()
@@ -39,6 +40,51 @@ const newRttYearError = computed(() => {
   return null
 })
 
+// L'agenda : le fichier à importer, et le lien d'abonnement. La base n'en garde
+// que l'empreinte : son adresse ne se montre qu'une fois, juste après sa création.
+const feedActive = ref(false)
+const feedUrl = ref(null)
+const feedBusy = ref(false)
+const feedError = ref(null)
+const webcalUrl = computed(() => feedUrl.value?.replace(/^https?:/, 'webcal:'))
+
+async function createFeed() {
+  feedBusy.value = true
+  feedError.value = null
+  try {
+    feedUrl.value = (await api.createCalendarFeed()).url
+    feedActive.value = true
+  } catch (error) {
+    feedError.value = `Lien impossible à créer : ${error.message}`
+  } finally {
+    feedBusy.value = false
+  }
+}
+
+async function disableFeed() {
+  feedBusy.value = true
+  feedError.value = null
+  try {
+    await api.deleteCalendarFeed()
+    feedActive.value = false
+    feedUrl.value = null
+    showToast({ message: 'Lien d’agenda désactivé.' })
+  } catch (error) {
+    feedError.value = `Désactivation impossible : ${error.message}`
+  } finally {
+    feedBusy.value = false
+  }
+}
+
+async function copyFeed() {
+  try {
+    await navigator.clipboard.writeText(feedUrl.value)
+    showToast({ message: 'Lien copié.' })
+  } catch {
+    showToast({ message: 'Copie impossible : sélectionnez le lien pour le copier.', tone: 'error' })
+  }
+}
+
 // L'apparence vaut pour cet appareil, tout de suite : rien à enregistrer.
 const themeOptions = [
   { value: 'system', label: 'Système', icon: 'monitor' },
@@ -51,8 +97,9 @@ async function load() {
   loadError.value = null
 
   try {
-    const [user, data, rttData] = await Promise.all([getCurrentUser(), api.getSettings(), api.listYearlyRtt()])
+    const [user, data, rttData, feed] = await Promise.all([getCurrentUser(), api.getSettings(), api.listYearlyRtt(), api.getCalendarFeed()])
     userEmail.value = user?.email ?? ''
+    feedActive.value = feed.active
 
     if (data) {
       form.value = {
@@ -235,6 +282,47 @@ async function deleteAccount() {
           </button>
         </div>
       </form>
+
+      <section class="card section" aria-labelledby="section-calendar">
+        <h2 id="section-calendar">Agenda</h2>
+        <p class="section-hint">Vos congés dans Google Agenda, Outlook ou l’agenda de votre téléphone.</p>
+
+        <div class="calendar-option">
+          <div>
+            <h3>Une fois</h3>
+            <p class="field-hint">Un fichier à importer : l’agenda ne le relit pas ensuite.</p>
+          </div>
+          <a class="btn btn-secondary" href="/api/calendar.ics" download>
+            <AppIcon name="calendar" :size="18" />
+            Télécharger le fichier .ics
+          </a>
+        </div>
+
+        <div class="calendar-option feed">
+          <div>
+            <h3>Abonnement</h3>
+            <p class="field-hint">Un lien privé, que l’agenda relit de lui-même : un congé accepté y passe de provisoire à confirmé.</p>
+          </div>
+          <div v-if="feedUrl" class="feed-new">
+            <p>Voici votre lien. Il ne s’affiche qu’une fois : copiez-le maintenant.</p>
+            <input class="input" readonly :value="feedUrl" aria-label="Lien d’abonnement" @focus="$event.target.select()" />
+            <div class="feed-actions">
+              <button type="button" class="btn btn-primary" @click="copyFeed">Copier le lien</button>
+              <a class="btn btn-secondary" :href="webcalUrl">Ouvrir dans l’agenda</a>
+            </div>
+            <p class="field-hint">Google Agenda : « Autres agendas », « + », puis « À partir de l’URL », et collez le lien.</p>
+          </div>
+          <p v-else-if="feedActive" class="field-hint">Un lien est actif. Perdu ? Créez-en un nouveau : l’ancien cessera de fonctionner.</p>
+          <p class="field-hint">Quiconque a ce lien voit vos congés : ne le partagez pas.</p>
+          <div class="feed-actions">
+            <button type="button" class="btn" :class="feedActive ? 'btn-secondary' : 'btn-primary'" :disabled="feedBusy" @click="createFeed">
+              {{ feedActive ? 'Créer un nouveau lien' : 'Créer le lien d’abonnement' }}
+            </button>
+            <button v-if="feedActive" type="button" class="btn btn-danger-ghost" :disabled="feedBusy" @click="disableFeed">Désactiver le lien</button>
+          </div>
+          <p v-if="feedError" class="error-text">{{ feedError }}</p>
+        </div>
+      </section>
 
       <section class="card section" aria-labelledby="section-theme">
         <h2 id="section-theme">Apparence</h2>
@@ -438,6 +526,46 @@ async function deleteAccount() {
     backdrop-filter: none;
     border-top: none;
   }
+}
+
+.calendar-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.calendar-option.feed {
+  flex-direction: column;
+  align-items: stretch;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.calendar-option h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.feed-new {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--focus);
+  border-radius: var(--radius);
+  background: var(--primary-soft);
+}
+
+.feed-new .input {
+  font-size: 0.85rem;
+}
+
+.feed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .account-email {

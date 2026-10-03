@@ -85,12 +85,19 @@ export function entriesInput(body) {
     throw bad(`« entries » doit lister de 1 à ${MAX_DAYS} jours.`)
   }
   return entries.map(entry => {
-    const e = fields(entry, ['date', 'type', 'status', 'duration'], 'Jour posé')
+    const e = fields(entry, ['date', 'type', 'status', 'duration'], 'Jour posé', ['half_day'])
+    const duration = number(e.duration, 'duration', { min: 0.5, max: 1 })
+    // Le moment d'une demi-journée, s'il est précisé ; jamais pour une journée entière.
+    const halfDay = e.half_day ?? null
+    if (halfDay !== null && (duration !== 0.5 || !['matin', 'apres-midi'].includes(halfDay))) {
+      throw bad('« half_day » vaut matin ou apres-midi, et seulement pour une demi-journée.')
+    }
     return {
       date: day(e.date, 'date'),
       type: oneOf(e.type, 'type', ['conge', 'rtt']),
       status: oneOf(e.status, 'status', ['brouillon', 'demande', 'accepte', 'impose']),
-      duration: number(e.duration, 'duration', { min: 0.5, max: 1 }),
+      duration,
+      half_day: halfDay,
     }
   })
 }

@@ -2,14 +2,17 @@
 //
 // Refus par défaut :
 // - toute route demande une session, sauf celles marquées `public` (la
-//   connexion et /healthz) : une nouvelle route est protégée sans rien faire ;
+//   connexion, /healthz, et le lien d'agenda, que protège son jeton secret) :
+//   une nouvelle route est protégée sans rien faire ;
 // - une requête qui écrit (POST, PUT, PATCH, DELETE) doit venir d'une page de
 //   l'app : son en-tête Origin doit être celui de PUBLIC_URL ;
 // - chaque route lit et écrit les données du compte de la session, et de lui
 //   seul (server/store.js).
 
+import { createHash, randomBytes } from 'node:crypto'
 import { createAuth, createGoogleOidc } from './auth.js'
 import { HttpError, readJson, sendJson, sendNoContent } from './http.js'
+import { buildCalendar } from './ics.js'
 import { createStatic } from './static.js'
 import { createStore } from './store.js'
 import { entriesInput, entriesReplaceInput, entriesStatusInput, entryIdsInput, isUuid, settingsInput, yearlyRttInput, yearlyRttPatchInput } from './validation.js'
@@ -41,6 +44,24 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
     return params.id
   }
 
+  // Le jeton d'un lien d'agenda : 32 octets au hasard ; la base n'en garde que l'empreinte.
+  const feedHash = token => createHash('sha256').update(token).digest('hex')
+
+  /** Les congés d'un compte, au format iCalendar. */
+  function sendCalendar(res, userId, disposition) {
+    const body = buildCalendar({
+      entries: store.listEntries(userId),
+      solidarityKey: store.getSettings(userId)?.journee_solidarite ?? null,
+      host: new URL(config.origin).host,
+    })
+    res.writeHead(200, {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': `${disposition}; filename="conges.ics"`,
+      'Cache-Control': 'private, max-age=300',
+    })
+    res.end(body)
+  }
+
   const routes = [
     // ── Publiques ──────────────────────────────────────────────────────────
     { method: 'GET', path: '/healthz', public: true, handler: ({ res }) => {
@@ -58,6 +79,35 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
     { method: 'GET', path: '/auth/callback', public: true, handler: ({ req, res }) => auth.finishLogin(req, res) },
     // Publique pour qu'une session déjà expirée puisse quand même effacer son cookie.
     { method: 'POST', path: '/auth/logout', public: true, handler: ({ req, res }) => auth.logout(req, res) },
+
+    // Le lien d'abonnement d'un agenda : sans session (l'agenda ne se connecte
+    // pas), mais son jeton est secret, et révocable depuis les Paramètres.
+    { method: 'GET', path: '/calendar/:file', public: true, handler: ({ res, params }) => {
+      const token = /^([A-Za-z0-9_-]{43})\.ics$/.exec(params.file)?.[1]
+      const userId = token && store.calendarFeedOwner(feedHash(token))
+      if (!userId) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+        return res.end('Agenda introuvable : ce lien a peut-être été remplacé ou désactivé.')
+      }
+      sendCalendar(res, userId, 'inline')
+    } },
+
+    // ── L'agenda : le fichier à importer, et le lien d'abonnement ──────────
+    { method: 'GET', path: '/api/calendar.ics', handler: ({ res, user }) => sendCalendar(res, user.id, 'attachment') },
+    { method: 'GET', path: '/api/calendar-feed', handler: ({ res, user }) => {
+      const feed = store.getCalendarFeed(user.id)
+      sendJson(res, 200, { active: !!feed, created_at: feed?.created_at ?? null })
+    } },
+    // Le lien ne se montre qu'une fois, à sa création ; en créer un autre remplace l'ancien.
+    { method: 'POST', path: '/api/calendar-feed', handler: ({ res, user }) => {
+      const token = randomBytes(32).toString('base64url')
+      const { created_at } = store.setCalendarFeed(user.id, feedHash(token))
+      sendJson(res, 201, { url: `${config.origin}/calendar/${token}.ics`, created_at })
+    } },
+    { method: 'DELETE', path: '/api/calendar-feed', handler: ({ res, user }) => {
+      store.deleteCalendarFeed(user.id)
+      sendNoContent(res)
+    } },
 
     // ── Le compte ──────────────────────────────────────────────────────────
     { method: 'GET', path: '/api/me', handler: ({ res, user }) =>
@@ -114,7 +164,8 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
     } },
   ].map(route => ({
     ...route,
-    pattern: new RegExp(`^${route.path.replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`),
+    // Un point dans le chemin (calendar.ics) vaut un point, pas n'importe quel caractère.
+    pattern: new RegExp(`^${route.path.replace(/\./g, '\\.').replace(/:(\w+)/g, '(?<$1>[^/]+)')}$`),
   }))
 
   function securityHeaders(res) {

@@ -14,12 +14,15 @@ const props = defineProps({
 const emit = defineEmits(['open'])
 
 const days = computed(() => props.group.entries.reduce((n, e) => n + (Number(e.duration) || 1), 0))
+// Le moment d'une demi-journée, s'il est précisé.
+const half = computed(() => ({ matin: 'matin', 'apres-midi': 'après-midi' })[props.group.halfDay] ?? 'j')
+const halfSpoken = computed(() => ({ matin: ', le matin', 'apres-midi': ', l’après-midi' })[props.group.halfDay] ?? '')
 const dates = computed(() =>
   props.group.startDay === props.group.endDay ? String(props.group.startDay) : `${props.group.startDay} → ${props.group.endDay}`)
 
 // « CP du 27 au 31 juillet, accepté, 5 jours » : ce que lisent les lecteurs d'écran.
 const label = computed(() => {
-  const length = days.value === 0.5 ? 'une demi-journée' : `${formatDays(days.value)} jour${days.value > 1 ? 's' : ''}`
+  const length = days.value === 0.5 ? `une demi-journée${halfSpoken.value}` : `${formatDays(days.value)} jour${days.value > 1 ? 's' : ''}`
   return `${typeLabels[props.group.type]} ${formatPeriod(props.group.startDate, props.group.endDate)}, ${statusLabels[props.group.status].toLowerCase()}, ${length}`
 })
 </script>
@@ -36,7 +39,7 @@ const label = computed(() => {
     <AppIcon :name="statusIcons[group.status]" :size="14" />
     <span class="chip-type">{{ typeLabels[group.type] }}</span>
     <span class="chip-dates num">{{ dates }}</span>
-    <span v-if="group.duration === 0.5" class="chip-extra">½ j</span>
+    <span v-if="group.duration === 0.5" class="chip-extra">½ {{ half }}</span>
     <span v-else-if="days > 1" class="chip-extra num">{{ formatDays(days) }} j</span>
   </button>
 </template>

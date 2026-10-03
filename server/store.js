@@ -51,9 +51,15 @@ export function createStore(db) {
     updateYearlyRtt: db.prepare('update yearly_rtt set rtt_count = ? where user_id = ? and id = ?'),
     deleteYearlyRtt: db.prepare('delete from yearly_rtt where user_id = ? and id = ?'),
 
+    calendarFeed: db.prepare('select created_at from calendar_feeds where user_id = ?'),
+    upsertCalendarFeed: db.prepare(`insert into calendar_feeds (user_id, token_hash, created_at) values (?, ?, ?)
+      on conflict (user_id) do update set token_hash = excluded.token_hash, created_at = excluded.created_at`),
+    deleteCalendarFeed: db.prepare('delete from calendar_feeds where user_id = ?'),
+    calendarFeedOwner: db.prepare('select user_id from calendar_feeds where token_hash = ?').pluck(),
+
     entries: db.prepare('select * from time_off_entries where user_id = ? order by date'),
-    insertEntry: db.prepare(`insert into time_off_entries (id, user_id, date, type, status, created_at, updated_at, duration)
-      values (@id, @user_id, @date, @type, @status, @now, @now, @duration)`),
+    insertEntry: db.prepare(`insert into time_off_entries (id, user_id, date, type, status, created_at, updated_at, duration, half_day)
+      values (@id, @user_id, @date, @type, @status, @now, @now, @duration, @half_day)`),
     entryById: db.prepare('select * from time_off_entries where user_id = ? and id = ?'),
     countOwnEntries: db.prepare('select count(*) from time_off_entries where user_id = ? and id in (select value from json_each(?))').pluck(),
     setOwnEntriesStatus: db.prepare('update time_off_entries set status = ?, updated_at = ? where user_id = ? and id in (select value from json_each(?))'),
@@ -103,6 +109,24 @@ export function createStore(db) {
     },
     purgeExpiredSessions() {
       return sql.purgeSessions.run(now()).changes
+    },
+
+    // ── Le lien d'agenda (par l'empreinte de son jeton) ────────────────────
+    getCalendarFeed(userId) {
+      return sql.calendarFeed.get(userId) ?? null
+    },
+    /** Crée le lien du compte, ou le remplace : l'ancien ne mène alors plus nulle part. */
+    setCalendarFeed(userId, tokenHash) {
+      const at = now()
+      sql.upsertCalendarFeed.run(userId, tokenHash, at)
+      return { created_at: at }
+    },
+    deleteCalendarFeed(userId) {
+      sql.deleteCalendarFeed.run(userId)
+    },
+    /** Le compte d'un lien d'agenda, ou null. */
+    calendarFeedOwner(tokenHash) {
+      return sql.calendarFeedOwner.get(tokenHash) ?? null
     },
 
     // ── Paramètres ─────────────────────────────────────────────────────────

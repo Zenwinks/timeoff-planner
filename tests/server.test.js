@@ -190,12 +190,14 @@ describe('le portier et les fichiers', () => {
     assert.deepEqual(dates, ['2026-09-07'])
   })
 
-  test('les lignes ont le format que renvoyait Supabase', async () => {
+  test('les lignes ont le format que renvoyait Supabase, plus le moment d’une demi-journée', async () => {
     const [entry] = (await t.request('GET', '/api/entries', { cookie })).json
-    assert.deepEqual(Object.keys(entry), ['id', 'user_id', 'date', 'type', 'status', 'created_at', 'updated_at', 'duration'])
+    assert.deepEqual(Object.keys(entry), ['id', 'user_id', 'date', 'type', 'status', 'created_at', 'updated_at', 'duration', 'half_day'])
     assert.equal(typeof entry.duration, 'number')
+    assert.equal(entry.half_day, null)
     const half = (await t.request('POST', '/api/entries', { cookie, body: { entries: [{ date: '2026-09-09', type: 'rtt', status: 'brouillon', duration: 0.5 }] } })).json[0]
     assert.equal(half.duration, 0.5)
+    assert.equal(half.half_day, null, 'sans moment précisé, comme avant')
     const rtt = (await t.request('POST', '/api/yearly-rtt', { cookie, body: { year: 2026, rtt_count: 10 } })).json
     assert.deepEqual(Object.keys(rtt), ['id', 'user_id', 'year', 'rtt_count', 'created_at'])
     assert.equal((await t.request('POST', '/api/yearly-rtt', { cookie, body: { year: 2026, rtt_count: 9 } })).status, 409)
@@ -258,6 +260,49 @@ describe('le portier et les fichiers', () => {
     } })
     assert.equal(ok.status, 200)
     assert.deepEqual(await dates(), ['2026-11-02 demande', '2026-11-03 demande', '2026-11-04 accepte'])
+  })
+
+  test('le fichier d’agenda se télécharge, avec la session', async () => {
+    assert.equal((await t.request('GET', '/api/calendar.ics', { origin: null })).status, 401)
+    const res = await t.request('GET', '/api/calendar.ics', { cookie, origin: null })
+    assert.equal(res.status, 200)
+    assert.match(res.headers.get('content-type'), /^text\/calendar/)
+    assert.match(res.headers.get('content-disposition'), /^attachment; filename="conges\.ics"/)
+    assert.match(res.text, /^BEGIN:VCALENDAR\r\n/)
+    // Un point vaut un point : pas de fichier à côté.
+    assert.equal((await t.request('GET', '/api/calendarXics', { cookie, origin: null })).status, 404)
+  })
+
+  test('le lien d’agenda : créé à la demande, montré une fois, désactivable', async () => {
+    assert.deepEqual((await t.request('GET', '/api/calendar-feed', { cookie })).json, { active: false, created_at: null })
+    assert.equal((await t.request('POST', '/api/calendar-feed', { cookie, origin: null })).status, 403, 'Origin vérifié')
+    const created = await t.request('POST', '/api/calendar-feed', { cookie })
+    assert.equal(created.status, 201)
+    assert.match(created.json.url, /^https:\/\/timeoff\.test\/calendar\/[A-Za-z0-9_-]{43}\.ics$/)
+    const status = (await t.request('GET', '/api/calendar-feed', { cookie })).json
+    assert.equal(status.active, true)
+    assert.equal(status.url, undefined, 'le lien ne se relit pas')
+    const feed = await t.request('GET', new URL(created.json.url).pathname, { origin: null })
+    assert.equal(feed.status, 200)
+    assert.match(feed.headers.get('content-disposition'), /^inline/)
+    assert.equal(t.db.prepare('select count(*) from calendar_feeds where token_hash like ?').pluck().get(`%${new URL(created.json.url).pathname.slice(10, 53)}%`), 0, 'la base ne garde pas le jeton')
+
+    assert.equal((await t.request('DELETE', '/api/calendar-feed', { cookie })).status, 204)
+    assert.equal((await t.request('GET', new URL(created.json.url).pathname, { origin: null })).status, 404)
+  })
+
+  test('une demi-journée se pose le matin ou l’après-midi, une journée entière jamais', async () => {
+    const post = entry => t.request('POST', '/api/entries', { cookie, body: { entries: [{ type: 'rtt', status: 'brouillon', ...entry }] } })
+    const morning = await post({ date: '2026-12-14', duration: 0.5, half_day: 'matin' })
+    assert.equal(morning.status, 201)
+    assert.equal(morning.json[0].half_day, 'matin')
+    assert.equal((await post({ date: '2026-12-15', duration: 1, half_day: 'matin' })).status, 400)
+    assert.equal((await post({ date: '2026-12-15', duration: 0.5, half_day: 'soir' })).status, 400)
+    // Modifier une demi-journée en garde le moment.
+    const replaced = await t.request('POST', '/api/entries/replace', { cookie, body: {
+      ids: [morning.json[0].id], entries: [{ date: '2026-12-14', type: 'rtt', status: 'demande', duration: 0.5, half_day: 'apres-midi' }],
+    } })
+    assert.deepEqual(replaced.json.map(e => [e.date, e.status, e.half_day]), [['2026-12-14', 'demande', 'apres-midi']])
   })
 
   test('changer le statut d’un congé, tous ses jours d’un coup', async () => {

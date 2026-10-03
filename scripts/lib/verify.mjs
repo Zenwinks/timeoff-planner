@@ -50,8 +50,12 @@ export function verifyAgainstBackup(db, reference, exported) {
     const expected = new Map(source.map(r => [r.id, r]))
     if (rows.length !== expected.size) problems.push(`${name} : ${rows.length} lignes servies, ${expected.size} exportées`)
     for (const row of rows) {
-      if (!isDeepStrictEqual({ ...row }, expected.get(row.id))) {
-        problems.push(`${name} ${row.id} : ${JSON.stringify(row)} ≠ ${JSON.stringify(expected.get(row.id) ?? null)}`)
+      const exportedRow = expected.get(row.id)
+      // Une colonne venue après Supabase (half_day…) : vide sur une ligne reprise.
+      const later = Object.keys(row).filter(k => exportedRow && !(k in exportedRow))
+      const kept = Object.fromEntries(Object.entries(row).filter(([k]) => !later.includes(k)))
+      if (!isDeepStrictEqual(kept, exportedRow) || later.some(k => row[k] !== null)) {
+        problems.push(`${name} ${row.id} : ${JSON.stringify(row)} ≠ ${JSON.stringify(exportedRow ?? null)}`)
       }
     }
   }

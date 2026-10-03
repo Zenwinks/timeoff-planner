@@ -4,7 +4,8 @@ import AppIcon from './AppIcon.vue'
 // Un choix parmi quelques options, toutes visibles d'un coup d'œil
 // (Prévisionnel / Confirmé, CP / RTT, les quatre statuts…).
 defineProps({
-  modelValue: { type: [String, Number], required: true },
+  // null : aucun choix encore (une demi-journée d'avant octobre 2026, sans moment).
+  modelValue: { type: [String, Number], default: null },
   // [{ value, label, icon? }]
   options: { type: Array, required: true },
   // Le nom du groupe pour les lecteurs d'écran : « Statut », « Durée »…
