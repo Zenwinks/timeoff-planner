@@ -151,6 +151,17 @@ describe('cloisonnement entre comptes', () => {
     assert.ok(!bobs.some(e => e.date === '2026-06-01'), 'rien n’a été posé pour Bob non plus')
   })
 
+  test('changer le statut des jours d’un autre compte échoue, sans rien changer', async () => {
+    const before = await aliceData()
+    const alone = await t.request('PATCH', '/api/entries', { cookie: bob, body: { ids: [aliceEntries[0].id], status: 'brouillon' } })
+    assert.equal(alone.status, 404)
+    const mixed = await t.request('PATCH', '/api/entries', { cookie: bob, body: { ids: [bobEntries[0].id, aliceEntries[1].id], status: 'impose' } })
+    assert.equal(mixed.status, 404)
+    assert.deepEqual(await aliceData(), before)
+    const bobs = (await t.request('GET', '/api/entries', { cookie: bob })).json
+    assert.equal(bobs.find(e => e.id === bobEntries[0].id).status, 'brouillon', 'le jour de Bob n’a pas bougé non plus')
+  })
+
   test('remplacer ses RTT par année ne touche pas à ceux d’un autre compte', async () => {
     const before = await aliceData()
     const res = await t.request('PUT', '/api/settings', { cookie: bob, body: { ...BOB_SETTINGS, yearly_rtt: [{ year: 2030, rtt_count: 4 }] } })

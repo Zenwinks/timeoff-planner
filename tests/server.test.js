@@ -260,6 +260,15 @@ describe('le portier et les fichiers', () => {
     assert.deepEqual(await dates(), ['2026-11-02 demande', '2026-11-03 demande', '2026-11-04 accepte'])
   })
 
+  test('changer le statut d’un congé, tous ses jours d’un coup', async () => {
+    const days = ['2026-12-07', '2026-12-08'].map(date => ({ date, type: 'rtt', status: 'demande', duration: 1 }))
+    const posted = (await t.request('POST', '/api/entries', { cookie, body: { entries: days } })).json
+    const res = await t.request('PATCH', '/api/entries', { cookie, body: { ids: posted.map(e => e.id), status: 'accepte' } })
+    assert.equal(res.status, 200)
+    assert.deepEqual(res.json.map(e => [e.date, e.status]), [['2026-12-07', 'accepte'], ['2026-12-08', 'accepte']])
+    assert.equal((await t.request('PATCH', '/api/entries', { cookie, body: { ids: posted.map(e => e.id), status: 'valide' } })).status, 400)
+  })
+
   test('les paramètres enregistrent la liste des RTT par année d’un seul coup', async () => {
     const settings = { start_year: 2026, initial_conges: 25, initial_rtt: 0, conges_increment_per_month: 2.08, journee_solidarite: null }
     const rtt = async () => (await t.request('GET', '/api/yearly-rtt', { cookie })).json.map(r => [r.year, r.rtt_count])

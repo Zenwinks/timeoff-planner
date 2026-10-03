@@ -106,6 +106,12 @@ export function entryIdsInput(body) {
   return entryIds(fields(body, ['ids'], 'Jours à retirer').ids)
 }
 
+/** Un congé qui change de statut : ses jours (`ids`) et leur nouveau statut. */
+export function entriesStatusInput(body) {
+  const { ids, status } = fields(body, ['ids', 'status'], 'Changement de statut')
+  return { ids: entryIds(ids), status: oneOf(status, 'status', ['brouillon', 'demande', 'accepte', 'impose']) }
+}
+
 /** Un congé modifié : les jours qu'il avait (`ids`), et ceux qu'il a maintenant (`entries`). */
 export function entriesReplaceInput(body) {
   const { ids, entries } = fields(body, ['ids', 'entries'], 'Congé modifié')

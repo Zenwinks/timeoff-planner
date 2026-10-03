@@ -56,6 +56,8 @@ export function createStore(db) {
       values (@id, @user_id, @date, @type, @status, @now, @now, @duration)`),
     entryById: db.prepare('select * from time_off_entries where user_id = ? and id = ?'),
     countOwnEntries: db.prepare('select count(*) from time_off_entries where user_id = ? and id in (select value from json_each(?))').pluck(),
+    setOwnEntriesStatus: db.prepare('update time_off_entries set status = ?, updated_at = ? where user_id = ? and id in (select value from json_each(?))'),
+    ownEntries: db.prepare('select * from time_off_entries where user_id = ? and id in (select value from json_each(?)) order by date'),
     deleteOwnEntries: db.prepare('delete from time_off_entries where user_id = ? and id in (select value from json_each(?))'),
   }
 
@@ -159,6 +161,18 @@ export function createStore(db) {
      */
     deleteEntries(userId, ids) {
       db.transaction(() => removeEntries(userId, ids))()
+    },
+    /**
+     * Change le statut de jours posés (« Demandé » devenu « Accepté »…), tous
+     * ou aucun : un seul identifiant étranger au compte, et rien ne change.
+     */
+    setEntriesStatus(userId, ids, status) {
+      return db.transaction(() => {
+        const unique = JSON.stringify([...new Set(ids)])
+        if (sql.countOwnEntries.get(userId, unique) !== new Set(ids).size) throw new HttpError(404, 'Jour introuvable.')
+        sql.setOwnEntriesStatus.run(status, now(), userId, unique)
+        return sql.ownEntries.all(userId, unique)
+      })()
     },
     /**
      * Modifie un congé : retire ses anciens jours et pose les nouveaux, d'un

@@ -12,7 +12,7 @@ import { createAuth, createGoogleOidc } from './auth.js'
 import { HttpError, readJson, sendJson, sendNoContent } from './http.js'
 import { createStatic } from './static.js'
 import { createStore } from './store.js'
-import { entriesInput, entriesReplaceInput, entryIdsInput, isUuid, settingsInput, yearlyRttInput, yearlyRttPatchInput } from './validation.js'
+import { entriesInput, entriesReplaceInput, entriesStatusInput, entryIdsInput, isUuid, settingsInput, yearlyRttInput, yearlyRttPatchInput } from './validation.js'
 
 const WRITES = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
@@ -101,6 +101,11 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
     { method: 'DELETE', path: '/api/entries', handler: async ({ req, res, user }) => {
       store.deleteEntries(user.id, entryIdsInput(await readJson(req)))
       sendNoContent(res)
+    } },
+    // Changer le statut d'un congé en un geste, tous ses jours d'un coup.
+    { method: 'PATCH', path: '/api/entries', handler: async ({ req, res, user }) => {
+      const { ids, status } = entriesStatusInput(await readJson(req))
+      sendJson(res, 200, store.setEntriesStatus(user.id, ids, status))
     } },
     // Modifier un congé : ses anciens jours remplacés par les nouveaux, tout ou rien.
     { method: 'POST', path: '/api/entries/replace', handler: async ({ req, res, user }) => {
