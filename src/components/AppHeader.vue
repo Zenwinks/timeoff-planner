@@ -1,10 +1,27 @@
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+
 // La barre du haut : le nom de l'app, qui ramène au tableau de bord, et les
 // actions de la page (slot).
+//
+// Sa hauteur est publiée dans --app-header-height, pour ce qui colle juste
+// dessous en défilant (la légende des statuts) : elle varie avec l'encoche d'un
+// iPhone, ou quand les actions passent à la ligne.
+const header = ref(null)
+let observer
+
+onMounted(() => {
+  observer = new ResizeObserver(([entry]) => {
+    document.documentElement.style.setProperty('--app-header-height', `${entry.target.offsetHeight}px`)
+  })
+  observer.observe(header.value)
+})
+
+onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <header class="app-header">
+  <header ref="header" class="app-header">
     <div class="app-header-inner">
       <router-link to="/" class="brand">
         <img src="/pwa-192x192.svg" alt="" width="30" height="30" />

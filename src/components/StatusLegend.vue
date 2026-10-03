@@ -31,6 +31,7 @@ function preview(event, key) {
       class="legend-item"
       :class="{ active: highlighted === key, dimmed: highlighted && highlighted !== key }"
       :aria-pressed="modelValue === key ? 'true' : 'false'"
+      :title="modelValue === key ? 'Un clic enlève la mise en avant' : 'Un clic garde ce statut en avant'"
       @click="toggle(key)"
       @pointerenter="preview($event, key)"
       @pointerleave="preview($event, null)"

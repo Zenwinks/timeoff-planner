@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import AppHeader from '../components/AppHeader.vue'
@@ -207,6 +207,14 @@ async function submitForm({ dateRange, type, status, duration, editing }) {
 }
 
 onMounted(loadData)
+
+// Une ombre sous la barre de réglages, dès que la page défile dessous.
+const scrolled = ref(false)
+const onScroll = () => {
+  scrolled.value = window.scrollY > 4
+}
+onMounted(() => window.addEventListener('scroll', onScroll, { passive: true }))
+onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 </script>
 
 <template>
@@ -229,10 +237,13 @@ onMounted(loadData)
     <div v-else-if="loading" class="state" aria-busy="true">Chargement…</div>
 
     <template v-else>
-      <div class="mode-bar">
+      <!-- Ce qui règle tout l'affichage : les soldes montrés, le statut mis en
+           avant. Sur ordinateur, collé sous la barre du haut dès le départ. -->
+      <div class="controls" :class="{ scrolled }">
         <SegmentedControl v-model="mode" :options="modeOptions" label="Soldes affichés" />
-        <p class="mode-hint">{{ modeHint }}</p>
+        <StatusLegend v-model="pinnedStatus" :highlighted="highlightedStatus" @preview="previewStatus = $event" />
       </div>
+      <p class="mode-hint">{{ modeHint }}</p>
 
       <SummaryCards
         :current="summary.current"
@@ -245,10 +256,7 @@ onMounted(loadData)
       />
 
       <section class="months-section" aria-labelledby="months-title">
-        <div class="months-toolbar">
-          <h2 id="months-title">Mois par mois</h2>
-          <StatusLegend v-model="pinnedStatus" :highlighted="highlightedStatus" @preview="previewStatus = $event" />
-        </div>
+        <h2 id="months-title">Mois par mois</h2>
         <button
           v-if="pastMonths.length"
           type="button"
@@ -314,17 +322,37 @@ onMounted(loadData)
   color: var(--text-subtle);
 }
 
-.mode-bar {
+.controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
 }
 
 .mode-hint {
-  flex: 1 1 18rem;
+  margin-top: -0.6rem;
   font-size: 0.85rem;
   color: var(--text-subtle);
+}
+
+/* Sur ordinateur, la barre de réglages est collée sous la barre du haut dès le
+   départ : elle ne bouge jamais au défilement, la souris ne quitte donc pas le
+   statut survolé, qui reste en avant sur toute la liste. (Au doigt, un toucher
+   fixe le statut : rien à coller, et la place est comptée.) */
+@media (min-width: 760px) {
+  .controls {
+    position: sticky;
+    top: var(--app-header-height, 60px);
+    z-index: 10;
+    padding: 1rem 0 0.75rem;
+    background: var(--bg);
+    transition: box-shadow 0.2s;
+  }
+
+  .controls.scrolled {
+    box-shadow: 0 1px 0 var(--border), 0 8px 16px -12px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .months-section {
@@ -333,15 +361,7 @@ onMounted(loadData)
   gap: 0.75rem;
 }
 
-.months-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem 1rem;
-}
-
-.months-toolbar h2 {
+.months-section h2 {
   font-size: 1.1rem;
   font-weight: 700;
 }
@@ -379,8 +399,10 @@ onMounted(loadData)
 }
 
 @media (min-width: 760px) {
+  /* Rien au-dessus de la barre de réglages : collée sous la barre du haut à
+     sa place naturelle, elle n'a pas à remonter. */
   .page {
-    padding: 1.5rem 1.5rem 3rem;
+    padding: 0 1.5rem 3rem;
   }
 
   .fab {

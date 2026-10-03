@@ -49,6 +49,22 @@ test('les mois passés sont repliés, le mois en cours vient en tête', async ({
   await expect(names.first()).toHaveText('Octobre 2026')
 })
 
+test('la légende reste à l’écran en défilant : le statut survolé reste en avant', async ({ page, account, isMobile }) => {
+  test.skip(isMobile, 'pas de survol au doigt : un toucher fixe le statut')
+  await openDashboard(page)
+  await page.getByRole('button', { name: /Afficher les 9 mois passés/ }).click()
+  const accepted = page.getByRole('group', { name: 'Mettre un statut en avant' }).getByRole('button', { name: 'Accepté' })
+  await accepted.hover()
+  await expect(page.locator('.chip.dimmed').first()).toBeVisible()
+
+  // La molette, la souris toujours posée sur « Accepté ».
+  await page.mouse.wheel(0, 2000)
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(300)
+  await page.waitForTimeout(500)
+  await expect(accepted).toBeInViewport()
+  expect(await page.locator('.chip.dimmed').count()).toBeGreaterThan(0)
+})
+
 test('le résumé annonce le prochain congé', async ({ page, account }) => {
   await openDashboard(page)
   const next = page.locator('.summary-card').filter({ hasText: 'Prochain congé' })
