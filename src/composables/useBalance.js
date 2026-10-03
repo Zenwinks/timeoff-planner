@@ -1,14 +1,10 @@
 import { computed } from 'vue'
 import { isHoliday } from '../holidays.js'
+import { formatDate, groupPeriods } from '../../shared/periods.js'
 import { CONFIRMED_STATUSES, monthNames } from '../constants.js'
 import { formatDays } from '../format.js'
 
-export function formatDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
+export { formatDate }
 
 export function getWorkingDaysInRange(startDate, endDate) {
   const days = []
@@ -25,45 +21,9 @@ export function getWorkingDaysInRange(startDate, endDate) {
   return days
 }
 
-function isNextWorkingDay(dateStrA, dateStrB) {
-  const a = new Date(dateStrA + 'T00:00')
-  const b = new Date(dateStrB + 'T00:00')
-  const next = new Date(a)
-  next.setDate(next.getDate() + 1)
-  while (next.getDay() === 0 || next.getDay() === 6 || isHoliday(formatDate(next))) {
-    next.setDate(next.getDate() + 1)
-  }
-  return next.getTime() === b.getTime()
-}
-
-export function groupEntries(monthEntries) {
-  if (monthEntries.length === 0) return []
-
-  const sorted = [...monthEntries].sort((a, b) => a.date.localeCompare(b.date))
-  const groups = []
-  let currentGroup = null
-
-  for (const entry of sorted) {
-    if (currentGroup && entry.type === currentGroup.type && entry.status === currentGroup.status && entry.duration === currentGroup.duration && isNextWorkingDay(currentGroup.endDate, entry.date) && entry.duration !== 0.5) {
-      currentGroup.entries.push(entry)
-      currentGroup.endDate = entry.date
-      currentGroup.endDay = new Date(entry.date + 'T00:00').getDate()
-    } else {
-      currentGroup = {
-        type: entry.type,
-        status: entry.status,
-        duration: entry.duration,
-        startDate: entry.date,
-        endDate: entry.date,
-        startDay: new Date(entry.date + 'T00:00').getDate(),
-        endDay: new Date(entry.date + 'T00:00').getDate(),
-        entries: [entry],
-      }
-      groups.push(currentGroup)
-    }
-  }
-
-  return groups
+// Les jours posés d'un mois, ou de toute la période, en congés d'un seul tenant.
+export function groupEntries(entries) {
+  return groupPeriods(entries, isHoliday)
 }
 
 function computeBalances(settings, yearlyRtt, entries, now = new Date()) {

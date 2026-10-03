@@ -47,6 +47,8 @@ ENV NODE_ENV=production \
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server ./server
+# Le socle commun à la PWA et au serveur (jours fériés, congés d'un seul tenant).
+COPY --from=build /app/shared ./shared
 COPY --from=build /app/dist ./dist
 
 # Le serveur tourne sous l'utilisateur `node` de l'image, pas sous root.
