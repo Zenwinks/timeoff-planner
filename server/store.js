@@ -5,6 +5,12 @@
 //
 // Les lignes sortent au format que renvoyait Supabase : mêmes colonnes,
 // nombres en nombres, dates en 'AAAA-MM-JJ'.
+//
+// Les transactions qui écrivent prennent le verrou d'écriture dès le début
+// (`.immediate()`, BEGIN IMMEDIATE) : une transaction différée qui lit avant
+// d'écrire échoue aussitôt (SQLITE_BUSY) si une autre connexion a écrit entre
+// les deux, sans attendre busy_timeout. Le serveur écrit seul en production,
+// mais un script ou les tests peuvent ouvrir la base en même temps.
 
 import { randomUUID } from 'node:crypto'
 import { HttpError } from './http.js'
@@ -81,7 +87,7 @@ export function createStore(db) {
         const id = randomUUID()
         sql.insertUser.run({ id, google_sub: sub, email, created_at: at, last_login_at: at })
         return { user: sql.userById.get(id), created: true }
-      })()
+      }).immediate()
     },
 
     getUser(userId) {
@@ -146,7 +152,7 @@ export function createStore(db) {
           sql.deleteOtherYearlyRtt.run(userId, JSON.stringify(yearlyRtt.map(r => r.year)))
         }
         return sql.settings.get(userId)
-      })()
+      }).immediate()
     },
 
     // ── RTT par année ──────────────────────────────────────────────────────
@@ -177,14 +183,14 @@ export function createStore(db) {
     },
     /** Pose des jours, tous ou aucun (une date déjà prise annule l'ensemble). */
     addEntries(userId, entries) {
-      return db.transaction(() => insertEntries(userId, entries))()
+      return db.transaction(() => insertEntries(userId, entries)).immediate()
     },
     /**
      * Retire des jours, tous ou aucun : si un seul identifiant n'est pas à ce
      * compte (ou n'existe pas), rien n'est supprimé.
      */
     deleteEntries(userId, ids) {
-      db.transaction(() => removeEntries(userId, ids))()
+      db.transaction(() => removeEntries(userId, ids)).immediate()
     },
     /**
      * Change le statut de jours posés (« Demandé » devenu « Accepté »…), tous
@@ -196,7 +202,7 @@ export function createStore(db) {
         if (sql.countOwnEntries.get(userId, unique) !== new Set(ids).size) throw new HttpError(404, 'Jour introuvable.')
         sql.setOwnEntriesStatus.run(status, now(), userId, unique)
         return sql.ownEntries.all(userId, unique)
-      })()
+      }).immediate()
     },
     /**
      * Modifie un congé : retire ses anciens jours et pose les nouveaux, d'un
@@ -207,7 +213,7 @@ export function createStore(db) {
       return db.transaction(() => {
         removeEntries(userId, ids)
         return insertEntries(userId, entries)
-      })()
+      }).immediate()
     },
   }
 
