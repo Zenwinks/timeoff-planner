@@ -76,6 +76,7 @@ test('au forfait jours, les RTT se calculent, et la journée de solidarité peut
   // 2026, le lundi de Pentecôte travaillé : 253 jours ouvrés − 25 CP − 218.
   await expect(page.getByLabel('RTT 2026', { exact: true })).toHaveValue('10')
   await expect(page.getByText('253 jours ouvrés − 25 CP − 218')).toBeVisible()
+  await expect(page.getByText('2028 s’ajoutera d’elle-même en janvier 2027.')).toBeVisible()
   await group(page, 'La journée de solidarité').getByRole('button', { name: 'Retirée des RTT' }).click()
   await expect(page.getByLabel('RTT 2026', { exact: true })).toHaveValue('9')
 

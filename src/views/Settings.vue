@@ -87,6 +87,9 @@ const forfaitYears = computed(() => {
   })
 })
 
+// La prochaine année qu'ajoutera le calendrier (en janvier de la dernière montrée).
+const nextForfaitYear = computed(() => (forfaitYears.value.length ? forfaitYears.value.at(-1).year + 1 : null))
+
 function setForfaitRtt(year, value) {
   const others = yearlyRtt.value.filter(r => r.year !== year)
   const auto = forfaitYears.value.find(y => y.year === year)?.auto
@@ -385,6 +388,10 @@ async function deleteAccount() {
                 </button>
               </li>
             </ul>
+            <p v-if="nextForfaitYear" class="field-hint">
+              Rien à ajouter : les années suivent le tableau de bord, l’année en cours et la suivante.
+              {{ nextForfaitYear }} s’ajoutera d’elle-même en janvier {{ nextForfaitYear - 1 }}.
+            </p>
           </template>
 
           <template v-else-if="hasRtt">
