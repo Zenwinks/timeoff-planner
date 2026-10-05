@@ -28,4 +28,11 @@ export const statusIcons = {
 export const typeLabels = {
   conge: 'CP',
   rtt: 'RTT',
+  maladie: 'Arrêt maladie',
 }
+
+/**
+ * Un arrêt maladie n'a pas de statut à suivre (il est enregistré « accepté ») :
+ * ni brouillon, ni demande, ni place dans la légende des statuts.
+ */
+export const isSickLeave = entry => entry.type === 'maladie'

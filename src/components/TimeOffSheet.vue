@@ -24,6 +24,8 @@ const props = defineProps({
   entries: { type: Array, default: () => [] },
   checkBalance: { type: Function, required: true },
   previewYearEnd: { type: Function, required: true },
+  // Sans RTT (contrat horaire qui n'en a pas), le type RTT n'est pas proposé.
+  rttEnabled: { type: Boolean, default: true },
   saving: { type: Boolean, default: false },
   error: { type: String, default: null },
 })
@@ -37,7 +39,13 @@ const duration = ref(1)
 // Le moment d'une demi-journée : 'matin', 'apres-midi', ou null (non précisé).
 const halfDay = ref('matin')
 
-const typeOptions = [{ value: 'conge', label: 'Congés payés' }, { value: 'rtt', label: 'RTT' }]
+const typeOptions = computed(() => [
+  { value: 'conge', label: 'Congés payés' },
+  ...(props.rttEnabled || type.value === 'rtt' ? [{ value: 'rtt', label: 'RTT' }] : []),
+  { value: 'maladie', label: 'Arrêt maladie' },
+])
+// Un arrêt maladie : des journées entières, sans statut à suivre (« accepté »).
+const sick = computed(() => type.value === 'maladie')
 const durationOptions = [{ value: 1, label: 'Journée entière' }, { value: 0.5, label: 'Demi-journée' }]
 const halfDayOptions = [{ value: 'matin', label: 'Matin' }, { value: 'apres-midi', label: 'Après-midi' }]
 const halfDayLabels = { matin: 'matin', 'apres-midi': 'après-midi' }
@@ -80,6 +88,12 @@ watch(isSingleDay, single => {
   if (!single) duration.value = 1
 })
 
+// Ce que la saisie posera : un arrêt maladie, en journées entières et « accepté »,
+// quels que soient la durée et le statut choisis pour un congé (et qu'on
+// retrouve en revenant à un congé).
+const poseDuration = computed(() => (sick.value ? 1 : duration.value))
+const poseStatus = computed(() => (sick.value ? 'accepte' : status.value))
+
 const editingEntries = computed(() => props.editing?.entries ?? [])
 const otherEntries = computed(() => {
   const ids = new Set(editingEntries.value.map(e => e.id))
@@ -95,11 +109,12 @@ const selection = computed(() => {
 })
 
 const check = computed(() => bounds.value
-  ? props.checkBalance(bounds.value, type.value, duration.value, status.value, editingEntries.value)
+  ? props.checkBalance(bounds.value, type.value, poseDuration.value, poseStatus.value, editingEntries.value)
   : { messages: [], blocking: false })
 
 const preview = computed(() => {
-  const result = bounds.value && props.previewYearEnd(bounds.value, type.value, duration.value, status.value, editingEntries.value)
+  if (sick.value) return null
+  const result = bounds.value && props.previewYearEnd(bounds.value, type.value, poseDuration.value, poseStatus.value, editingEntries.value)
   if (!result) return null
   return { year: result.year, ...result[type.value === 'conge' ? 'cp' : 'rtt'] }
 })
@@ -113,7 +128,7 @@ const periodText = computed(() => {
 const daysText = computed(() => {
   const n = selection.value?.free ?? 0
   if (!n) return ''
-  if (duration.value === 0.5) return `Une demi-journée${{ matin: ', le matin', 'apres-midi': ', l’après-midi' }[halfDay.value] ?? ''}`
+  if (poseDuration.value === 0.5) return `Une demi-journée${{ matin: ', le matin', 'apres-midi': ', l’après-midi' }[halfDay.value] ?? ''}`
   return `${n} jour${n > 1 ? 's' : ''} ouvré${n > 1 ? 's' : ''}`
 })
 
@@ -131,7 +146,7 @@ const submitLabel = computed(() => {
   if (props.editing) return `Enregistrer${despite}`
   const n = selection.value?.free ?? 0
   if (!n) return 'Poser'
-  if (duration.value === 0.5) return `Poser la demi-journée${despite}`
+  if (poseDuration.value === 0.5) return `Poser la demi-journée${despite}`
   return `Poser ${n} jour${n > 1 ? 's' : ''}${despite}`
 })
 
@@ -140,9 +155,9 @@ function submit() {
   emit('submit', {
     dateRange: bounds.value,
     type: type.value,
-    status: status.value,
-    duration: duration.value,
-    halfDay: duration.value === 0.5 ? halfDay.value : null,
+    status: poseStatus.value,
+    duration: poseDuration.value,
+    halfDay: poseDuration.value === 0.5 ? halfDay.value : null,
     editing: props.editing,
   })
 }
@@ -154,13 +169,19 @@ function disabledDates(date) {
 
 // Les repères du calendrier : un point sous chaque jour déjà posé (couleur du
 // type), un trait sous chaque férié.
+const markerColors = { conge: 'var(--cp)', rtt: 'var(--rtt)', maladie: 'var(--sick)' }
+const hasSickLeave = computed(() => otherEntries.value.some(e => e.type === 'maladie'))
 const markers = computed(() => {
-  const color = t => (t === 'conge' ? 'var(--cp)' : 'var(--rtt)')
   const taken = otherEntries.value.map(e => ({
     date: new Date(`${e.date}T00:00`),
     type: 'dot',
-    color: color(e.type),
-    tooltip: [{ text: `${typeLabels[e.type]} · ${statusLabels[e.status].toLowerCase()}${e.duration === 0.5 ? ` · ${halfDayLabels[e.half_day] ?? '½ j'}` : ''}`, color: color(e.type) }],
+    color: markerColors[e.type],
+    tooltip: [{
+      text: e.type === 'maladie'
+        ? typeLabels.maladie
+        : `${typeLabels[e.type]} · ${statusLabels[e.status].toLowerCase()}${e.duration === 0.5 ? ` · ${halfDayLabels[e.half_day] ?? '½ j'}` : ''}`,
+      color: markerColors[e.type],
+    }],
   }))
   const year = new Date().getFullYear()
   const holidays = holidaysBetween(year - 1, year + 2).map(h => ({
@@ -195,7 +216,8 @@ const markers = computed(() => {
         </div>
         <p class="calendar-legend">
           <span><i class="dot cp" aria-hidden="true"></i>CP posé</span>
-          <span><i class="dot rtt" aria-hidden="true"></i>RTT posé</span>
+          <span v-if="rttEnabled"><i class="dot rtt" aria-hidden="true"></i>RTT posé</span>
+          <span v-if="hasSickLeave"><i class="dot sick" aria-hidden="true"></i>Arrêt maladie</span>
           <span><i class="line" aria-hidden="true"></i>Férié</span>
         </p>
       </div>
@@ -215,18 +237,19 @@ const markers = computed(() => {
             <span class="field-label">Type</span>
             <SegmentedControl v-model="type" class="wide" :options="typeOptions" label="Type" />
           </div>
-          <div v-if="isSingleDay" class="field">
+          <div v-if="isSingleDay && !sick" class="field">
             <span class="field-label">Durée</span>
             <SegmentedControl v-model="duration" class="wide" :options="durationOptions" label="Durée" />
           </div>
-          <div v-if="isSingleDay && duration === 0.5" class="field">
+          <div v-if="isSingleDay && !sick && duration === 0.5" class="field">
             <span class="field-label">Moment</span>
             <SegmentedControl v-model="halfDay" class="wide" :options="halfDayOptions" label="Moment" />
           </div>
-          <div class="field">
+          <div v-if="!sick" class="field">
             <span class="field-label">Statut</span>
             <SegmentedControl v-model="status" class="wide status-grid" :options="statusOptions" label="Statut" />
           </div>
+          <p v-else class="field-hint">En journées entières. Un arrêt maladie ne compte ni sur les CP ni sur les RTT.</p>
         </div>
 
         <p v-if="preview && selection?.free" class="preview">
@@ -319,6 +342,10 @@ const markers = computed(() => {
 
 .dot.rtt {
   background: var(--rtt);
+}
+
+.dot.sick {
+  background: var(--sick);
 }
 
 .line {

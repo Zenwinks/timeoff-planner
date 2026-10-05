@@ -32,6 +32,7 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 | `src/style.css` | la base visuelle : couleurs des deux thèmes (variables CSS), boutons, champs, cartes, contrôles segmentés |
 | `public/theme-init.js` | pose le thème choisi avant le premier affichage (un fichier à part : la CSP n'admet pas de script dans la page) |
 | `src/dashboard.js` | ce que montre le tableau de bord : les deux soldes par mois, les congés d'un seul tenant, le prochain congé, les jours en attente (fonctions pures, `tests/dashboard.test.js`) |
+| `src/contract.js` | le contrat : RTT d'une année au forfait, RTT que comptent les soldes, jours travaillés de l'année (fonctions pures, `tests/contract.test.js`) |
 | `shared/` | ce que partagent la PWA et le serveur : les jours fériés (sans état : la journée de solidarité se passe en argument) et le regroupement des jours en congés d'un seul tenant |
 | `views/Dashboard.vue` | le résumé, le choix prévisionnel / confirmé, les mois en liste ou l'année en calendrier |
 | `components/YearCalendar.vue` | l'année d'un coup d'œil : un clic sur un jour posé ouvre son congé, sur un jour libre en pose un |
@@ -99,7 +100,19 @@ Supabase (base et connexion). Voir « Sortie de Supabase » plus bas.
 
 Un jour posé peut être une demi-journée (`duration` 0,5), le matin ou l'après-midi
 (`half_day` : `matin`, `apres-midi`, ou `null` pour celles posées avant octobre
-2026, sans moment précisé).
+2026, sans moment précisé). Son `type` : `conge`, `rtt`, ou `maladie` pour un
+arrêt maladie, toujours en journées entières et au statut `accepte` ; il ne
+touche à aucun solde, et l'agenda abonné ne le montre que comme une « Absence ».
+
+Les paramètres disent aussi le contrat (facultatifs dans le `PUT` : absents, ils
+gardent leur valeur) :
+
+| Champ | Valeurs |
+| --- | --- |
+| `contrat` | `horaire` (les RTT de chaque année se saisissent) ou `forfait_jours` |
+| `forfait_jours` | au forfait, les jours à travailler dans l'année (218 le plus souvent) ; les RTT de chaque année en découlent : jours ouvrés − CP − forfait (`src/contract.js`). Une ligne de `yearly_rtt` corrige alors une année à la main |
+| `rtt_mode` | `annuel` (les RTT de l'année arrivent en janvier), `mensuel` (un douzième par mois) ou `aucun` (pas de RTT, au contrat horaire) |
+| `solidarite_rtt` | au forfait, `true` : la journée de solidarité est retirée des RTT au lieu d'être travaillée ; ce jour-là reste chômé |
 
 `POST /api/yearly-rtt`, `PATCH` et `DELETE /api/yearly-rtt/:id` ne servent plus
 à l'app depuis octobre 2026 : elles restent pour un onglet resté ouvert sur une

@@ -1,13 +1,14 @@
 <script setup>
 import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
-import { statusIcons, statusLabels, typeLabels } from '../constants'
+import { isSickLeave, statusIcons, statusLabels, typeLabels } from '../constants'
 import { formatDays, formatPeriod } from '../format'
 
 // La part d'un congé posée dans un mois : « CP 5j du 27 au 31 », « RTT 1j le
 // 30 », « RTT ½j le 13 après-midi ». La durée d'abord, puis les dates en toutes
 // lettres : un « CP 7 » se lisait comme sept jours de CP. Sa couleur dit le type
-// (CP ou RTT), son style et son icône le statut. Un clic ouvre le congé entier.
+// (CP, RTT ou arrêt maladie), son style et son icône le statut. Un clic ouvre le
+// congé entier.
 const props = defineProps({
   group: { type: Object, required: true },
   dimmed: { type: Boolean, default: false },
@@ -27,11 +28,17 @@ const dates = computed(() => props.group.startDay === props.group.endDay
   : `du ${dayOf(props.group.startDay)} au ${dayOf(props.group.endDay)}`)
 const halfSpoken = computed(() => ({ matin: ', le matin', 'apres-midi': ', l’après-midi' })[props.group.halfDay] ?? '')
 
+// Un arrêt maladie : « Maladie », une croix, et pas de statut.
+const sick = computed(() => isSickLeave(props.group))
+const shortType = computed(() => (sick.value ? 'Maladie' : typeLabels[props.group.type]))
+const icon = computed(() => (sick.value ? 'medical' : statusIcons[props.group.status]))
+
 // « CP du 27 au 31 juillet, accepté, 5 jours » : ce que lisent les lecteurs d'écran.
 const label = computed(() => {
   const length = days.value === 0.5 ? `une demi-journée${halfSpoken.value}` : `${formatDays(days.value)} jour${days.value > 1 ? 's' : ''}`
   const outside = props.uncounted ? ', hors du solde confirmé' : ''
-  return `${typeLabels[props.group.type]} ${formatPeriod(props.group.startDate, props.group.endDate)}, ${statusLabels[props.group.status].toLowerCase()}, ${length}${outside}`
+  const status = sick.value ? '' : `, ${statusLabels[props.group.status].toLowerCase()}`
+  return `${typeLabels[props.group.type]} ${formatPeriod(props.group.startDate, props.group.endDate)}${status}, ${length}${outside}`
 })
 </script>
 
@@ -44,8 +51,8 @@ const label = computed(() => {
     :title="label"
     @click="emit('open', group)"
   >
-    <AppIcon :name="statusIcons[group.status]" :size="14" />
-    <span class="chip-type">{{ typeLabels[group.type] }}</span>
+    <AppIcon :name="icon" :size="14" />
+    <span class="chip-type">{{ shortType }}</span>
     <span class="chip-days num">{{ shortDays }}</span>
     <span class="chip-dates num">{{ dates }}</span>
   </button>
@@ -80,6 +87,13 @@ const label = computed(() => {
   --chip: var(--rtt);
   --chip-strong: var(--rtt-strong);
   --chip-soft: var(--rtt-soft);
+}
+
+/* Un arrêt maladie est enregistré « accepté » : plein, comme un congé acquis. */
+.chip.maladie {
+  --chip: var(--sick);
+  --chip-strong: var(--sick-strong);
+  --chip-soft: var(--sick-soft);
 }
 
 /* Le statut : le remplissage et l'icône. Acquis : plein. Demandé : teinté et

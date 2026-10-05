@@ -1,7 +1,7 @@
 <script setup>
 import AppIcon from './AppIcon.vue'
 import EntryChip from './EntryChip.vue'
-import { CONFIRMED_STATUSES } from '../constants'
+import { CONFIRMED_STATUSES, isSickLeave } from '../constants'
 import { formatDays } from '../format'
 
 // Les mois, l'un sous l'autre : les soldes de fin de mois (selon le mode), puis
@@ -13,18 +13,22 @@ defineProps({
   months: { type: Array, required: true },
   mode: { type: String, required: true },
   highlighted: { type: String, default: null },
+  // Sans RTT (contrat horaire qui n’en a pas) : ni colonne RTT ni total.
+  rttEnabled: { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['open'])
 </script>
 
 <template>
-  <div class="months">
+  <div class="months" :class="{ 'no-rtt': !rttEnabled }">
     <div class="months-header" aria-hidden="true">
       <span>Mois</span>
       <span class="num-col">CP</span>
-      <span class="num-col">RTT</span>
-      <span class="num-col">Total</span>
+      <template v-if="rttEnabled">
+        <span class="num-col">RTT</span>
+        <span class="num-col">Total</span>
+      </template>
       <span>Congés posés</span>
     </div>
     <ol class="month-list">
@@ -44,11 +48,11 @@ const emit = defineEmits(['open'])
             <dt>CP</dt>
             <dd class="num" :class="{ negative: month[mode].cp < 0 }">{{ formatDays(month[mode].cp) }}</dd>
           </div>
-          <div class="balance rtt">
+          <div v-if="rttEnabled" class="balance rtt">
             <dt>RTT</dt>
             <dd class="num" :class="{ negative: month[mode].rtt < 0 }">{{ formatDays(month[mode].rtt) }}</dd>
           </div>
-          <div class="balance total">
+          <div v-if="rttEnabled" class="balance total">
             <dt>Total</dt>
             <dd class="num" :class="{ negative: month[mode].total < 0 }">{{ formatDays(month[mode].total) }}</dd>
           </div>
@@ -58,12 +62,12 @@ const emit = defineEmits(['open'])
             v-for="(group, i) in month.groups"
             :key="i"
             :group="group"
-            :dimmed="!!highlighted && highlighted !== group.status"
+            :dimmed="!!highlighted && (isSickLeave(group) || highlighted !== group.status)"
             :uncounted="mode === 'confirmed' && !CONFIRMED_STATUSES.has(group.status)"
             @open="emit('open', group)"
           />
         </div>
-        <p v-if="month[mode].rttDecemberWarning" class="month-warning">
+        <p v-if="rttEnabled && month[mode].rttDecemberWarning" class="month-warning">
           <AppIcon name="alert" :size="16" />
           Il reste {{ formatDays(month[mode].rtt) }} RTT : à poser avant le 31 décembre, seules les décimales passent en janvier.
         </p>
@@ -237,6 +241,11 @@ const emit = defineEmits(['open'])
 
   .month-warning {
     grid-column: 1 / -1;
+  }
+
+  .no-rtt .months-header,
+  .no-rtt .month {
+    grid-template-columns: 11.5rem 5.5rem minmax(0, 1fr);
   }
 }
 </style>

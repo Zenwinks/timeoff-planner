@@ -64,10 +64,10 @@ export function periodOf(periods, entryId) {
   return periods.find(p => p.entries.some(e => e.id === entryId)) ?? null
 }
 
-/** Le congé en cours, ou sinon le prochain. `today` : AAAA-MM-JJ. */
+/** Le congé en cours, ou sinon le prochain (un arrêt maladie n'en est pas un). `today` : AAAA-MM-JJ. */
 export function nextPeriod(periods, today) {
   return periods
-    .filter(p => p.endDate >= today)
+    .filter(p => p.endDate >= today && p.type !== 'maladie')
     .sort((a, b) => a.startDate.localeCompare(b.startDate))[0] ?? null
 }
 

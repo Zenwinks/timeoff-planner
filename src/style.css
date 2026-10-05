@@ -7,7 +7,8 @@
  * sur <html> avant le premier affichage.
  *
  * Les couleurs disent deux choses, jamais la même : le type d'un congé (CP en
- * indigo, RTT en sarcelle) ; son statut se lit à son icône et à son style.
+ * indigo, RTT en sarcelle, arrêt maladie en framboise) ; son statut se lit à
+ * son icône et à son style.
  * Tous les textes visent un contraste AA (4,5:1) dans les deux thèmes.
  */
 
@@ -46,6 +47,10 @@
   --rtt: #4fd6c4;
   --rtt-strong: #0d7f72;
   --rtt-soft: rgba(47, 195, 176, 0.16);
+  /* Les arrêts maladie : ni CP ni RTT, en framboise. */
+  --sick: #f49ac1;
+  --sick-strong: #b4326e;
+  --sick-soft: rgba(240, 120, 170, 0.16);
 
   --radius-sm: 6px;
   --radius: 10px;
@@ -97,6 +102,9 @@
     --rtt: #0a6e63;
     --rtt-strong: #0b7a6d;
     --rtt-soft: #dcf3ef;
+    --sick: #a3245e;
+    --sick-strong: #b0306a;
+    --sick-soft: #fbe6ef;
     --shadow: 0 1px 2px rgba(22, 26, 45, 0.06), 0 4px 16px rgba(22, 26, 45, 0.06);
     --shadow-lg: 0 12px 40px rgba(22, 26, 45, 0.18);
   }
@@ -132,6 +140,9 @@
   --rtt: #0a6e63;
   --rtt-strong: #0b7a6d;
   --rtt-soft: #dcf3ef;
+  --sick: #a3245e;
+  --sick-strong: #b0306a;
+  --sick-soft: #fbe6ef;
   --shadow: 0 1px 2px rgba(22, 26, 45, 0.06), 0 4px 16px rgba(22, 26, 45, 0.06);
   --shadow-lg: 0 12px 40px rgba(22, 26, 45, 0.18);
 }

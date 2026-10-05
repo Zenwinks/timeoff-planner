@@ -14,10 +14,12 @@ import TimeOffSheet from '../components/TimeOffSheet.vue'
 import YearCalendar from '../components/YearCalendar.vue'
 import { getWorkingDaysInRange, useBalance } from '../composables/useBalance'
 import { showToast } from '../composables/useToasts'
-import { statusLabels } from '../constants'
+import { CONFIRMED_STATUSES, isSickLeave, statusLabels } from '../constants'
+import { hasRtt, isForfait, workedDays } from '../contract'
 import { mergeRecaps, nextPeriod, pendingDays, periodOf, periodsOf, splitByYear, summaryMonths, today as todayOf, yearsLabel } from '../dashboard'
 import { formatDays, formatPeriod } from '../format'
 import { setSolidarite } from '../holidays'
+import { workedSolidarityDay } from '../../shared/holidays.js'
 
 const router = useRouter()
 const settings = ref(null)
@@ -73,6 +75,17 @@ const modeHint = computed(() => {
     : 'Seuls les congés acceptés ou imposés sont décomptés.'
 })
 
+// Le contrat : des RTT ou non, et au forfait jours les jours travaillés de
+// l'année, comptés comme les soldes (au confirmé, les jours acquis seulement).
+const rttEnabled = computed(() => hasRtt(settings.value))
+const forfait = computed(() => {
+  if (!isForfait(settings.value)) return null
+  const counted = mode.value === 'confirmed'
+    ? allEntries.value.filter(e => CONFIRMED_STATUSES.has(e.status) || isSickLeave(e))
+    : allEntries.value
+  return workedDays(settings.value, counted, Number(today.slice(0, 4)), today)
+})
+
 // ── Les mois : l'année en cours en entier, les autres années repliées ──
 const byYear = computed(() => splitByYear(months.value, Number(today.slice(0, 4))))
 const showBefore = ref(false)
@@ -94,7 +107,8 @@ async function loadData() {
   try {
     const s = await api.getSettings()
     settings.value = s
-    setSolidarite(s?.journee_solidarite)
+    // La journée de solidarité travaillée : aucune si, au forfait, elle est retirée des RTT.
+    setSolidarite(workedSolidarityDay(s))
     if (!s) {
       router.push('/settings')
       return
@@ -282,6 +296,8 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
         :mode="mode"
         :next="next"
         :today="today"
+        :rtt-enabled="rttEnabled"
+        :forfait="forfait"
         @open="openPeriod"
         @new="openNew"
       />
@@ -303,7 +319,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
             <AppIcon :name="showBefore ? 'chevron-up' : 'chevron-down'" :size="18" />
             {{ showBefore ? 'Masquer' : 'Afficher' }} {{ yearsLabel(byYear.before) }}
           </button>
-          <MonthList :months="visibleMonths" :mode="mode" :highlighted="highlightedStatus" @open="openGroup" />
+          <MonthList :months="visibleMonths" :mode="mode" :highlighted="highlightedStatus" :rtt-enabled="rttEnabled" @open="openGroup" />
           <button
             v-if="byYear.after.length"
             type="button"
@@ -352,6 +368,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
     :entries="allEntries"
     :check-balance="checkNegativeBalance"
     :preview-year-end="previewYearEnd"
+    :rtt-enabled="rttEnabled"
     :saving="saving"
     :error="formError"
     @submit="submitForm"

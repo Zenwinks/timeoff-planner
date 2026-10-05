@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { formatDate } from '../composables/useBalance'
-import { CONFIRMED_STATUSES, monthNames, statusLabels, typeLabels } from '../constants'
+import { CONFIRMED_STATUSES, isSickLeave, monthNames, statusLabels, typeLabels } from '../constants'
 import { holidaysBetween } from '../holidays'
 
 // L'année d'un coup d'œil : les douze mois, chaque jour posé aux couleurs de
@@ -53,6 +53,7 @@ const uncounted = entry => props.mode === 'confirmed' && !CONFIRMED_STATUSES.has
 
 function entryLabel(day) {
   const e = day.entry
+  if (isSickLeave(e)) return `${day.name} : arrêt maladie`
   const half = e.duration === 0.5 ? `, ${HALVES[e.half_day] ?? 'une demi-journée'}` : ''
   const outside = uncounted(e) ? ', hors du solde confirmé' : ''
   return `${day.name} : ${typeLabels[e.type]}, ${statusLabels[e.status].toLowerCase()}${half}${outside}`
@@ -78,7 +79,7 @@ function halfClass(entry) {
             v-if="day.entry"
             type="button"
             class="day taken num"
-            :class="[day.entry.type, day.entry.status, halfClass(day.entry), { today: day.today, dimmed: highlighted && highlighted !== day.entry.status, uncounted: uncounted(day.entry) }]"
+            :class="[day.entry.type, day.entry.status, halfClass(day.entry), { today: day.today, dimmed: highlighted && (isSickLeave(day.entry) || highlighted !== day.entry.status), uncounted: uncounted(day.entry) }]"
             :aria-current="day.today ? 'date' : undefined"
             :aria-label="entryLabel(day)"
             :title="entryLabel(day)"
@@ -200,6 +201,12 @@ button.day {
   --c: var(--rtt);
   --c-strong: var(--rtt-strong);
   --c-soft: var(--rtt-soft);
+}
+
+.day.taken.maladie {
+  --c: var(--sick);
+  --c-strong: var(--sick-strong);
+  --c-soft: var(--sick-soft);
 }
 
 .day.taken.accepte,

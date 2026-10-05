@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { isHoliday } from '../holidays.js'
 import { formatDate, groupPeriods } from '../../shared/periods.js'
 import { CONFIRMED_STATUSES, monthNames } from '../constants.js'
+import { effectiveYearlyRtt } from '../contract.js'
 import { formatDays } from '../format.js'
 
 export { formatDate }
@@ -26,6 +27,10 @@ export function groupEntries(entries) {
   return groupPeriods(entries, isHoliday)
 }
 
+// Un solde ramené au milliardième : douze douzièmes de RTT ne font pas toujours
+// un entier exact en virgule flottante, et le report de janvier en dépend.
+const settle = value => Math.round(value * 1e9) / 1e9
+
 function computeBalances(settings, yearlyRtt, entries, now = new Date()) {
   const s = settings
   const startYear = Number(s.start_year)
@@ -36,23 +41,24 @@ function computeBalances(settings, yearlyRtt, entries, now = new Date()) {
   let cpBalance = Number(s.initial_conges) || 0
   let rttBalance = Number(s.initial_rtt) || 0
   const cpIncrement = Number(s.conges_increment_per_month) || 0
+  // Les RTT de l'année : d'un coup en janvier, ou un douzième chaque mois.
+  const monthlyRtt = s.rtt_mode === 'mensuel'
   const rows = []
 
   for (let abs = startAbs; abs <= endAbs; abs++) {
     const year = Math.floor(abs / 12)
     const month = abs % 12
+    const rttForYear = Number(yearlyRtt.find(r => Number(r.year) === year)?.rtt_count) || 0
 
     cpBalance += cpIncrement
 
     if (month === 0) {
       // Transition décembre → janvier : ne reporter que les décimales, pas le négatif
-      rttBalance = rttBalance >= 0 ? rttBalance % 1 : 0
-
-      const rttForYear = yearlyRtt.find(r => Number(r.year) === year)
-      if (rttForYear) {
-        rttBalance += Number(rttForYear.rtt_count) || 0
-      }
+      const carried = settle(rttBalance)
+      rttBalance = carried >= 0 ? settle(carried % 1) : 0
+      if (!monthlyRtt) rttBalance += rttForYear
     }
+    if (monthlyRtt) rttBalance += rttForYear / 12
 
     const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
     const monthEntries = entries.filter(e => e.date.startsWith(monthStr))
@@ -93,16 +99,20 @@ export function buildMonthlyRecap(settings, yearlyRtt, entries, now = new Date()
 }
 
 export function useBalance(settings, yearlyRtt, allEntries) {
+  // Les RTT de chaque année que comptent les soldes : ceux saisis, ceux que
+  // donne le forfait jours, ou aucun (src/contract.js).
+  const rtt = computed(() => effectiveYearlyRtt(settings.value, yearlyRtt.value))
+
   // Le solde prévisionnel : tous les jours posés sont décomptés.
   const monthlyRecap = computed(() => {
     if (!settings.value) return []
-    return buildMonthlyRecap(settings.value, yearlyRtt.value, allEntries.value)
+    return buildMonthlyRecap(settings.value, rtt.value, allEntries.value)
   })
 
   // Le solde confirmé : seuls les jours acceptés ou imposés sont décomptés.
   const confirmedRecap = computed(() => {
     if (!settings.value) return []
-    return buildMonthlyRecap(settings.value, yearlyRtt.value, allEntries.value.filter(e => CONFIRMED_STATUSES.has(e.status)))
+    return buildMonthlyRecap(settings.value, rtt.value, allEntries.value.filter(e => CONFIRMED_STATUSES.has(e.status)))
   })
 
   /**
@@ -121,7 +131,7 @@ export function useBalance(settings, yearlyRtt, allEntries) {
     const taken = new Set(kept.map(e => e.date))
     const newDays = getWorkingDaysInRange(start, end ?? start).filter(d => !taken.has(d))
     const year = (end ?? start).getFullYear()
-    const december = entries => computeBalances(settings.value, yearlyRtt.value, entries).find(r => r.year === year && r.month === 11)
+    const december = entries => computeBalances(settings.value, rtt.value, entries).find(r => r.year === year && r.month === 11)
 
     const before = december(allEntries.value)
     const after = december([...kept, ...newDays.map(date => ({ date, type: formType, duration: Number(formDuration), status: formStatus }))])
@@ -149,13 +159,15 @@ export function useBalance(settings, yearlyRtt, allEntries) {
     const existingDates = new Set(filteredEntries.map(e => e.date))
     const newDays = workingDays.filter(d => !existingDates.has(d))
     if (newDays.length === 0) return { messages: ['Toutes les dates sélectionnées sont déjà occupées.'], blocking: true }
+    // Un arrêt maladie ne touche à aucun solde.
+    if (type === 'maladie') return { messages: [], blocking: false }
 
     const simEntries = [
       ...filteredEntries,
       ...newDays.map(date => ({ date, type, duration, status: formStatus })),
     ]
 
-    const balances = computeBalances(settings.value, yearlyRtt.value, simEntries)
+    const balances = computeBalances(settings.value, rtt.value, simEntries)
     const warnings = []
 
     let blocking = false

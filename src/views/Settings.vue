@@ -8,6 +8,8 @@ import AppIcon from '../components/AppIcon.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
 import { themeChoice } from '../composables/useTheme'
 import { showToast } from '../composables/useToasts'
+import { balanceYears, forfaitRtt } from '../contract'
+import { formatDays } from '../format'
 import { HOLIDAY_KEYS } from '../holidays'
 
 const router = useRouter()
@@ -27,13 +29,73 @@ const form = ref({
   initial_rtt: 0,
   conges_increment_per_month: 2.08,
   journee_solidarite: null,
+  contrat: 'horaire',
+  forfait_jours: null,
+  rtt_mode: 'annuel',
+  solidarite_rtt: false,
 })
 
 // Les RTT par année se modifient ici et s'enregistrent avec le reste, d'un seul
-// coup : « Annuler » n'a rien à défaire.
+// coup : « Annuler » n'a rien à défaire. Au contrat horaire, ce sont ceux saisis ;
+// au forfait, les seules années corrigées à la main.
 const yearlyRtt = ref([])
 const newRttYear = ref(new Date().getFullYear())
 const newRttCount = ref(9)
+
+// ── Le contrat ──
+const contractOptions = [{ value: 'horaire', label: 'Horaire' }, { value: 'forfait_jours', label: 'Forfait jours' }]
+const isForfait = computed(() => form.value.contrat === 'forfait_jours')
+const hasRtt = computed(() => isForfait.value || form.value.rtt_mode !== 'aucun')
+const rttModeOptions = computed(() => [
+  { value: 'annuel', label: 'Au 1er janvier' },
+  { value: 'mensuel', label: 'Au fil des mois' },
+  ...(isForfait.value ? [] : [{ value: 'aucun', label: 'Pas de RTT' }]),
+])
+const rttModeHints = {
+  annuel: 'Les RTT de l’année arrivent d’un coup, en janvier.',
+  mensuel: 'Chaque mois apporte un douzième des RTT de l’année.',
+  aucun: 'L’app ne montre que vos CP.',
+}
+const solidarityOptions = [{ value: false, label: 'Travaillée' }, { value: true, label: 'Retirée des RTT' }]
+
+// Changer de contrat garde ce que l'on avait saisi pour l'autre : revenu à
+// l'horaire, on retrouve ses RTT ; revenu au forfait, ses années corrigées.
+// Passé au forfait pour la première fois, les RTT se calculent tous ;
+// revenu à l'horaire sans rien de saisi, on part de ceux du forfait.
+const stashedRtt = {}
+function setContract(contrat) {
+  const from = form.value.contrat
+  if (contrat === from) return
+  stashedRtt[from] = yearlyRtt.value
+  const forfaitValues = forfaitYears.value.map(y => ({ year: y.year, rtt_count: y.rtt }))
+  form.value.contrat = contrat
+  if (contrat === 'forfait_jours') {
+    form.value.forfait_jours ??= 218
+    if (form.value.rtt_mode === 'aucun') form.value.rtt_mode = 'annuel'
+  }
+  yearlyRtt.value = stashedRtt[contrat] ?? (contrat === 'forfait_jours' ? [] : forfaitValues)
+}
+
+// Au forfait, les RTT de chaque année : ceux que donne le calcul, ou la valeur
+// corrigée à la main (que l'on peut toujours ramener au calcul).
+const forfaitYears = computed(() => {
+  if (!isForfait.value || !(form.value.forfait_jours > 0)) return []
+  return balanceYears(form.value).map(year => {
+    const computedRtt = forfaitRtt(form.value, year)
+    const set = yearlyRtt.value.find(r => r.year === year)
+    return { ...computedRtt, auto: computedRtt.rtt, rtt: set ? set.rtt_count : computedRtt.rtt, edited: !!set }
+  })
+})
+
+function setForfaitRtt(year, value) {
+  const others = yearlyRtt.value.filter(r => r.year !== year)
+  const auto = forfaitYears.value.find(y => y.year === year)?.auto
+  yearlyRtt.value = value === auto ? others : [...others, { year, rtt_count: value }].sort((a, b) => a.year - b.year)
+}
+
+function resetForfaitRtt(year) {
+  yearlyRtt.value = yearlyRtt.value.filter(r => r.year !== year)
+}
 
 const newRttYearError = computed(() => {
   if (newRttYear.value < form.value.start_year) return `L'année doit être ≥ ${form.value.start_year}`
@@ -109,6 +171,10 @@ async function load() {
         initial_rtt: data.initial_rtt,
         conges_increment_per_month: data.conges_increment_per_month,
         journee_solidarite: data.journee_solidarite || null,
+        contrat: data.contrat ?? 'horaire',
+        forfait_jours: data.forfait_jours ?? null,
+        rtt_mode: data.rtt_mode ?? 'annuel',
+        solidarite_rtt: !!data.solidarite_rtt,
       }
       newRttYear.value = data.start_year
     } else {
@@ -147,6 +213,7 @@ function invalidField() {
     ['Congés initiaux', form.value.initial_conges],
     ['RTT initiaux', form.value.initial_rtt],
     ['Acquisition par mois', form.value.conges_increment_per_month],
+    ...(isForfait.value ? [['Jours à travailler par an', form.value.forfait_jours]] : []),
     ...yearlyRtt.value.map(r => [`RTT ${r.year}`, r.rtt_count]),
   ].find(([, value]) => !isNumber(value))?.[0] ?? null
 }
@@ -156,6 +223,10 @@ async function save() {
   const invalid = invalidField()
   if (invalid) {
     saveError.value = `« ${invalid} » doit être un nombre.`
+    return
+  }
+  if (isForfait.value && !(Number.isInteger(form.value.forfait_jours) && form.value.forfait_jours >= 1 && form.value.forfait_jours <= 366)) {
+    saveError.value = '« Jours à travailler par an » doit être un nombre entier de jours, entre 1 et 366.'
     return
   }
 
@@ -213,6 +284,41 @@ async function deleteAccount() {
       </div>
 
       <form class="settings-form" @submit.prevent="save">
+        <section class="card section" aria-labelledby="section-contract">
+          <h2 id="section-contract">Contrat</h2>
+          <div class="field">
+            <span class="field-label">Type de contrat</span>
+            <SegmentedControl :model-value="form.contrat" :options="contractOptions" label="Type de contrat" @update:model-value="setContract" />
+            <span class="field-hint">
+              {{ isForfait
+                ? 'Au forfait jours, l’app calcule vos RTT d’après les jours à travailler, et compte vos jours travaillés.'
+                : 'Au contrat horaire, vos RTT, si vous en avez, se saisissent année par année.' }}
+            </span>
+          </div>
+          <div v-if="isForfait" class="field">
+            <label class="field-label" for="settings-forfait">Jours à travailler par an</label>
+            <input id="settings-forfait" v-model.number="form.forfait_jours" class="input forfait-input" type="number" step="1" min="1" max="366" />
+            <span class="field-hint">Ceux de votre contrat, journée de solidarité comprise : 218 le plus souvent.</span>
+          </div>
+          <div class="field">
+            <label class="field-label" for="settings-solidarite">Journée de solidarité</label>
+            <select id="settings-solidarite" v-model="form.journee_solidarite" class="select">
+              <option :value="null">Aucune</option>
+              <option v-for="h in HOLIDAY_KEYS" :key="h.key" :value="h.key">{{ h.label }}</option>
+            </select>
+            <span v-if="!isForfait || !form.journee_solidarite" class="field-hint">Ce jour férié est travaillé : il compte comme un jour ouvré.</span>
+          </div>
+          <div v-if="isForfait && form.journee_solidarite" class="field">
+            <span class="field-label">Cette journée est…</span>
+            <SegmentedControl v-model="form.solidarite_rtt" :options="solidarityOptions" label="La journée de solidarité" />
+            <span class="field-hint">
+              {{ form.solidarite_rtt
+                ? 'Retirée des RTT : ce jour férié reste chômé, et l’année compte un RTT de moins.'
+                : 'Travaillée : ce jour férié compte comme un jour ouvré.' }}
+            </span>
+          </div>
+        </section>
+
         <section class="card section" aria-labelledby="section-balances">
           <h2 id="section-balances">Soldes de départ</h2>
           <div class="grid">
@@ -231,7 +337,7 @@ async function deleteAccount() {
               <input id="settings-initial-conges" v-model.number="form.initial_conges" class="input" type="number" step="0.01" min="0" />
               <span class="field-hint">Solde CP reporté de l’année précédente.</span>
             </div>
-            <div class="field">
+            <div v-if="hasRtt" class="field">
               <label class="field-label" for="settings-initial-rtt">RTT initiaux</label>
               <input id="settings-initial-rtt" v-model.number="form.initial_rtt" class="input" type="number" step="0.01" min="0" />
               <span class="field-hint">Solde RTT reporté : seules les décimales passent d’une année à l’autre.</span>
@@ -240,39 +346,69 @@ async function deleteAccount() {
         </section>
 
         <section class="card section" aria-labelledby="section-rtt">
-          <h2 id="section-rtt">RTT par année</h2>
-          <p class="section-hint">Les RTT accordés chaque année, ajoutés au solde en janvier.</p>
-          <ul v-if="yearlyRtt.length" class="rtt-list">
-            <li v-for="item in yearlyRtt" :key="item.year" class="rtt-row">
-              <span class="rtt-year num">{{ item.year }}</span>
-              <input v-model.number="item.rtt_count" class="input rtt-input" type="number" step="0.01" min="0" :aria-label="`RTT ${item.year}`" />
-              <button type="button" class="btn btn-ghost btn-icon" :aria-label="`Retirer ${item.year}`" :title="`Retirer ${item.year}`" @click="removeRttYear(item)">
-                <AppIcon name="trash" :size="18" />
-              </button>
-            </li>
-          </ul>
-          <p v-else class="section-hint">Aucune année configurée.</p>
-          <div class="rtt-add">
-            <input v-model.number="newRttYear" class="input rtt-year-input" :class="{ invalid: newRttYearError }" type="number" :min="form.start_year" aria-label="Nouvelle année" />
-            <input v-model.number="newRttCount" class="input rtt-input" type="number" step="0.01" min="0" aria-label="RTT de la nouvelle année" />
-            <button type="button" class="btn btn-secondary" :disabled="!!newRttYearError" @click="addRttYear">
-              <AppIcon name="plus" :size="18" />
-              Ajouter
-            </button>
-          </div>
-          <p v-if="newRttYearError" class="error-text">{{ newRttYearError }}</p>
-        </section>
-
-        <section class="card section" aria-labelledby="section-holidays">
-          <h2 id="section-holidays">Jours fériés</h2>
+          <h2 id="section-rtt">RTT</h2>
           <div class="field">
-            <label class="field-label" for="settings-solidarite">Journée de solidarité</label>
-            <select id="settings-solidarite" v-model="form.journee_solidarite" class="select">
-              <option :value="null">Aucune</option>
-              <option v-for="h in HOLIDAY_KEYS" :key="h.key" :value="h.key">{{ h.label }}</option>
-            </select>
-            <span class="field-hint">Ce jour férié est travaillé : il compte comme un jour ouvré.</span>
+            <span class="field-label">Acquisition</span>
+            <SegmentedControl v-model="form.rtt_mode" :options="rttModeOptions" label="Acquisition des RTT" />
+            <span class="field-hint">{{ rttModeHints[form.rtt_mode] }}</span>
           </div>
+
+          <template v-if="isForfait">
+            <p class="section-hint">
+              Les RTT de chaque année, calculés d’après le forfait. Corrigez une année si votre entreprise en compte autrement.
+            </p>
+            <ul v-if="forfaitYears.length" class="rtt-list">
+              <li v-for="y in forfaitYears" :key="y.year" class="rtt-row">
+                <span class="rtt-year num">{{ y.year }}</span>
+                <input
+                  :value="y.rtt"
+                  class="input rtt-input"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  :aria-label="`RTT ${y.year}`"
+                  @input="setForfaitRtt(y.year, $event.target.valueAsNumber)"
+                />
+                <span class="rtt-auto num">
+                  <template v-if="y.edited">Corrigé · calcul : {{ formatDays(y.auto) }}</template>
+                  <template v-else>{{ y.working }} jours ouvrés − {{ y.cp }} CP − {{ y.forfait }}</template>
+                </span>
+                <button
+                  v-if="y.edited"
+                  type="button"
+                  class="btn btn-ghost btn-icon"
+                  :aria-label="`Revenir au calcul pour ${y.year}`"
+                  :title="`Revenir au calcul pour ${y.year}`"
+                  @click="resetForfaitRtt(y.year)"
+                >
+                  <AppIcon name="undo" :size="18" />
+                </button>
+              </li>
+            </ul>
+          </template>
+
+          <template v-else-if="hasRtt">
+            <p class="section-hint">Les RTT accordés chaque année.</p>
+            <ul v-if="yearlyRtt.length" class="rtt-list">
+              <li v-for="item in yearlyRtt" :key="item.year" class="rtt-row">
+                <span class="rtt-year num">{{ item.year }}</span>
+                <input v-model.number="item.rtt_count" class="input rtt-input" type="number" step="0.01" min="0" :aria-label="`RTT ${item.year}`" />
+                <button type="button" class="btn btn-ghost btn-icon" :aria-label="`Retirer ${item.year}`" :title="`Retirer ${item.year}`" @click="removeRttYear(item)">
+                  <AppIcon name="trash" :size="18" />
+                </button>
+              </li>
+            </ul>
+            <p v-else class="section-hint">Aucune année configurée.</p>
+            <div class="rtt-add">
+              <input v-model.number="newRttYear" class="input rtt-year-input" :class="{ invalid: newRttYearError }" type="number" :min="form.start_year" aria-label="Nouvelle année" />
+              <input v-model.number="newRttCount" class="input rtt-input" type="number" step="0.01" min="0" aria-label="RTT de la nouvelle année" />
+              <button type="button" class="btn btn-secondary" :disabled="!!newRttYearError" @click="addRttYear">
+                <AppIcon name="plus" :size="18" />
+                Ajouter
+              </button>
+            </div>
+            <p v-if="newRttYearError" class="error-text">{{ newRttYearError }}</p>
+          </template>
         </section>
 
         <div class="form-actions">
@@ -463,6 +599,21 @@ async function deleteAccount() {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+}
+
+.rtt-row {
+  flex-wrap: wrap;
+}
+
+/* Au forfait : d'où vient le nombre, ou qu'il a été corrigé. */
+.rtt-auto {
+  flex: 1 1 12rem;
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.forfait-input {
+  max-width: 9rem;
 }
 
 .rtt-year {

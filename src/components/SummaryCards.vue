@@ -1,18 +1,34 @@
 <script setup>
+import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import { monthNames, statusIcons, statusLabels, typeLabels } from '../constants'
 import { whenLabel } from '../dashboard'
 import { formatDays, formatPeriod } from '../format'
 
 // L'essentiel, en haut du tableau de bord : le solde à la fin du mois, celui
-// de fin d'année, et le prochain congé. Les soldes suivent le mode choisi
-// (prévisionnel ou confirmé).
-defineProps({
+// de fin d'année, le prochain congé et, au forfait jours, les jours travaillés
+// de l'année. Soldes et jours travaillés suivent le mode choisi (prévisionnel
+// ou confirmé).
+const props = defineProps({
   current: { type: Object, default: null },
   yearEnd: { type: Object, default: null },
   mode: { type: String, required: true },
   next: { type: Object, default: null },
   today: { type: String, required: true },
+  // Sans RTT (contrat horaire qui n’en a pas), les soldes ne montrent que les CP.
+  rttEnabled: { type: Boolean, default: true },
+  // Au forfait jours : workedDays() de src/contract.js, sinon null.
+  forfait: { type: Object, default: null },
+})
+
+// « 253 jours ouvrés − 25 CP − 10 RTT − 3 jours d'arrêt = 215 » : de quoi
+// comparer avec un outil RH.
+const forfaitDetail = computed(() => {
+  const f = props.forfait
+  if (!f) return ''
+  const parts = [`${f.working} jours ouvrés`, `${formatDays(f.cp)} CP`, `${formatDays(f.rtt)} RTT`]
+  if (f.sick) parts.push(`${formatDays(f.sick)} jour${f.sick > 1 ? 's' : ''} d’arrêt`)
+  return `${parts.join(' − ')} = ${formatDays(f.worked)}`
 })
 
 const emit = defineEmits(['open', 'new'])
@@ -31,7 +47,7 @@ const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1)
           <span class="balance-type">CP</span>
           <span class="balance-value num" :class="{ negative: current[mode].cp < 0 }">{{ formatDays(current[mode].cp) }}</span>
         </p>
-        <p class="balance rtt">
+        <p v-if="rttEnabled" class="balance rtt">
           <span class="balance-type">RTT</span>
           <span class="balance-value num" :class="{ negative: current[mode].rtt < 0 }">{{ formatDays(current[mode].rtt) }}</span>
         </p>
@@ -46,12 +62,12 @@ const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1)
           <span class="balance-type">CP</span>
           <span class="balance-value num" :class="{ negative: yearEnd[mode].cp < 0 }">{{ formatDays(yearEnd[mode].cp) }}</span>
         </p>
-        <p class="balance rtt">
+        <p v-if="rttEnabled" class="balance rtt">
           <span class="balance-type">RTT</span>
           <span class="balance-value num" :class="{ negative: yearEnd[mode].rtt < 0 }">{{ formatDays(yearEnd[mode].rtt) }}</span>
         </p>
       </div>
-      <p v-if="yearEnd[mode].rttDecemberWarning" class="summary-warning">
+      <p v-if="rttEnabled && yearEnd[mode].rttDecemberWarning" class="summary-warning">
         <AppIcon name="alert" :size="16" />
         {{ formatDays(yearEnd[mode].rtt) }} RTT à poser avant le 31 décembre
       </p>
@@ -75,6 +91,26 @@ const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1)
         </button>
       </template>
     </article>
+
+    <article v-if="forfait" class="card summary-card forfait">
+      <h2 class="summary-title">Forfait {{ forfait.year }}</h2>
+      <p class="summary-sub">Jours travaillés, pour un forfait de {{ forfait.forfait }} jours</p>
+      <div class="balances">
+        <p class="balance">
+          <span class="balance-type">À ce jour</span>
+          <span class="balance-value num">{{ formatDays(forfait.workedToDate) }}</span>
+        </p>
+        <p class="balance">
+          <span class="balance-type">Au 31 décembre</span>
+          <span class="balance-value num" :class="{ over: forfait.over > 0 }">{{ formatDays(forfait.worked) }}</span>
+        </p>
+      </div>
+      <p class="summary-detail num">{{ forfaitDetail }}</p>
+      <p v-if="forfait.over > 0" class="summary-warning">
+        <AppIcon name="alert" :size="16" />
+        {{ formatDays(forfait.over) }} jour{{ forfait.over > 1 ? 's' : '' }} de trop : à poser avant le 31 décembre
+      </p>
+    </article>
   </section>
 </template>
 
@@ -92,8 +128,19 @@ const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1)
   padding: 1rem 1.1rem;
 }
 
-.summary-card.next {
+.summary-card.next,
+.summary-card.forfait {
   grid-column: 1 / -1;
+}
+
+.summary-detail {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+}
+
+.balance-value.over {
+  color: var(--warning);
 }
 
 .summary-title {

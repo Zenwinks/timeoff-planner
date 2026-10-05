@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import BottomSheet from './BottomSheet.vue'
 import SegmentedControl from './SegmentedControl.vue'
-import { CONFIRMED_STATUSES, statusIcons, statusLabels, typeLabels } from '../constants'
+import { CONFIRMED_STATUSES, isSickLeave, statusIcons, statusLabels, typeLabels } from '../constants'
 import { formatDays, formatPeriod } from '../format'
 
 // Un congé ouvert depuis sa puce : ce qu'il est, son statut (qui se change d'un
@@ -31,8 +31,11 @@ const facts = computed(() => {
   if (!p) return ''
   const moment = { matin: ', le matin', 'apres-midi': ', l’après-midi' }[p.halfDay] ?? ''
   const length = p.duration === 0.5 ? `Une demi-journée${moment}` : `${formatDays(p.days)} jour${p.days > 1 ? 's' : ''} ouvré${p.days > 1 ? 's' : ''}`
-  return `${p.type === 'conge' ? 'Congés payés' : 'RTT'} · ${length}`
+  return `${{ conge: 'Congés payés', rtt: 'RTT', maladie: 'Arrêt maladie' }[p.type]} · ${length}`
 })
+
+// Un arrêt maladie : pas de statut à suivre, et rien de décompté.
+const sick = computed(() => !!props.period && isSickLeave(props.period))
 
 // Les deux soldes, dits pour ce congé-ci.
 const countsIn = computed(() =>
@@ -45,7 +48,8 @@ const countsIn = computed(() =>
   <BottomSheet :open="open" :title="title" @update:open="emit('update:open', $event)">
     <template v-if="period">
       <p class="facts">{{ facts }}</p>
-      <div class="field">
+      <p v-if="sick" class="field-hint">Ne compte ni sur les CP ni sur les RTT. Au forfait jours, ce sont des jours non travaillés.</p>
+      <div v-else class="field">
         <span class="field-label">Statut</span>
         <SegmentedControl
           class="wide status-grid"

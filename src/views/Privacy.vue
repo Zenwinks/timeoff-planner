@@ -27,6 +27,11 @@ const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
           c'est le service lui-même, ils servent à calculer vos soldes.
         </li>
         <li>
+          <strong>Vos arrêts maladie, si vous en saisissez</strong> : seulement leurs dates, pour les
+          voir dans vos mois et compter vos jours travaillés. Une date d’arrêt touche à votre santé :
+          vous seul la voyez, et votre lien d’agenda ne la montre que comme une « Absence ».
+        </li>
+        <li>
           <strong>La date de création du compte, celle de la dernière connexion et vos sessions</strong> :
           pour vous garder connecté 30 jours sur chaque appareil.
         </li>
