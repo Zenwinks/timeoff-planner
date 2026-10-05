@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+
 // https://vite.dev/config/
 export default defineConfig({
+  // La version affichée en pied de page (AppFooter.vue).
+  define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [
     vue(),
     VitePWA({

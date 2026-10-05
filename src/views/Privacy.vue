@@ -1,4 +1,5 @@
 <script setup>
+import AppFooter from '../components/AppFooter.vue'
 import AppHeader from '../components/AppHeader.vue'
 
 // L'adresse où joindre le responsable du service.
@@ -82,13 +83,15 @@ const CONTACT_EMAIL = 'salle.lucas13@gmail.com'
 
       <router-link to="/" class="back">← Retour</router-link>
     </article>
+    <AppFooter />
   </main>
 </template>
 
 <style scoped>
 .privacy {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 1rem 1rem 2.5rem;
 }
 

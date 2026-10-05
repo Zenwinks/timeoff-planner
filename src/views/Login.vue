@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import AppFooter from '../components/AppFooter.vue'
 import AppIcon from '../components/AppIcon.vue'
 
 // Le serveur renvoie ici, avec ?erreur=…, quand la connexion n'a pas abouti.
@@ -35,6 +36,7 @@ const error = computed(() => errorMessages[route.query.erreur] ?? null)
         Se connecter avec Google
       </a>
       <router-link to="/confidentialite" class="privacy-link">Vos données personnelles</router-link>
+      <AppFooter />
     </div>
   </main>
 </template>

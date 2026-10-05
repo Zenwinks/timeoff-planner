@@ -4,8 +4,10 @@ import AppIcon from './AppIcon.vue'
 import { statusIcons, statusLabels, typeLabels } from '../constants'
 import { formatDays, formatPeriod } from '../format'
 
-// La part d'un congé posée dans un mois. Sa couleur dit le type (CP ou RTT),
-// son style et son icône le statut. Un clic ouvre le congé entier.
+// La part d'un congé posée dans un mois : « CP 5j du 27 au 31 », « RTT 1j le
+// 30 », « RTT ½j le 13 après-midi ». La durée d'abord, puis les dates en toutes
+// lettres : un « CP 7 » se lisait comme sept jours de CP. Sa couleur dit le type
+// (CP ou RTT), son style et son icône le statut. Un clic ouvre le congé entier.
 const props = defineProps({
   group: { type: Object, required: true },
   dimmed: { type: Boolean, default: false },
@@ -16,11 +18,14 @@ const props = defineProps({
 const emit = defineEmits(['open'])
 
 const days = computed(() => props.group.entries.reduce((n, e) => n + (Number(e.duration) || 1), 0))
-// Le moment d'une demi-journée, s'il est précisé.
-const half = computed(() => ({ matin: 'matin', 'apres-midi': 'après-midi' })[props.group.halfDay] ?? 'j')
+const shortDays = computed(() => (days.value === 0.5 ? '½j' : `${formatDays(days.value)}j`))
+const dayOf = day => (day === 1 ? '1er' : String(day))
+// Le moment d'une demi-journée, s'il est précisé : « le 13 après-midi ».
+const moment = computed(() => ({ matin: ' matin', 'apres-midi': ' après-midi' })[props.group.halfDay] ?? '')
+const dates = computed(() => props.group.startDay === props.group.endDay
+  ? `le ${dayOf(props.group.startDay)}${moment.value}`
+  : `du ${dayOf(props.group.startDay)} au ${dayOf(props.group.endDay)}`)
 const halfSpoken = computed(() => ({ matin: ', le matin', 'apres-midi': ', l’après-midi' })[props.group.halfDay] ?? '')
-const dates = computed(() =>
-  props.group.startDay === props.group.endDay ? String(props.group.startDay) : `${props.group.startDay} → ${props.group.endDay}`)
 
 // « CP du 27 au 31 juillet, accepté, 5 jours » : ce que lisent les lecteurs d'écran.
 const label = computed(() => {
@@ -41,9 +46,8 @@ const label = computed(() => {
   >
     <AppIcon :name="statusIcons[group.status]" :size="14" />
     <span class="chip-type">{{ typeLabels[group.type] }}</span>
+    <span class="chip-days num">{{ shortDays }}</span>
     <span class="chip-dates num">{{ dates }}</span>
-    <span v-if="group.duration === 0.5" class="chip-extra">½ {{ half }}</span>
-    <span v-else-if="days > 1" class="chip-extra num">{{ formatDays(days) }} j</span>
   </button>
 </template>
 
@@ -131,10 +135,12 @@ const label = computed(() => {
   letter-spacing: 0.03em;
 }
 
-.chip-extra {
-  font-size: 0.72rem;
+.chip-days {
+  font-weight: 800;
+}
+
+.chip-dates {
   font-weight: 500;
-  opacity: 0.85;
 }
 
 @media (pointer: coarse) {

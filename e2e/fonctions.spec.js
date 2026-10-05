@@ -30,10 +30,9 @@ test('une demi-journée se pose le matin ou l’après-midi', async ({ page, acc
 
 test('une demi-journée d’avant octobre 2026 reste sans moment', async ({ page, account }) => {
   await openDashboard(page)
-  await page.getByRole('button', { name: /Afficher les 9 mois passés/ }).click()
   const march = chip(page, 'CP le 13 mars, accepté, une demi-journée$')
   await expect(march).toBeVisible()
-  await expect(march).toContainText('½ j')
+  await expect(march).toHaveText(/^CP\s*½j\s*le 13$/)
 })
 
 test('l’année en calendrier : un jour posé ouvre son congé, un jour libre en pose un', async ({ page, account }) => {

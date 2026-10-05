@@ -6,7 +6,7 @@ import { before, describe, test } from 'node:test'
 import { DEMO_PERIODS, DEMO_SETTINGS, DEMO_YEARLY_RTT } from '../scripts/lib/demo.mjs'
 import { buildMonthlyRecap, getWorkingDaysInRange } from '../src/composables/useBalance.js'
 import { CONFIRMED_STATUSES } from '../src/constants.js'
-import { mergeRecaps, nextPeriod, pendingDays, periodOf, periodsOf, summaryMonths, whenLabel } from '../src/dashboard.js'
+import { mergeRecaps, nextPeriod, pendingDays, periodOf, periodsOf, splitByYear, summaryMonths, whenLabel, yearsLabel } from '../src/dashboard.js'
 import { setSolidarite } from '../src/holidays.js'
 
 const NOW = new Date(2026, 9, 5, 12)
@@ -66,5 +66,23 @@ describe('le tableau de bord', () => {
     const { current, yearEnd } = summaryMonths(months, NOW)
     assert.deepEqual([current.label, yearEnd.label], ['Octobre 2026', 'Décembre 2026'])
     assert.equal(summaryMonths(months, new Date(2026, 11, 10)).yearEnd.label, 'Décembre 2027')
+  })
+
+  test('les mois se rangent autour de l’année en cours', () => {
+    const { before, during, after } = splitByYear(months, 2026)
+    assert.equal(before.length, 0)
+    assert.deepEqual([during[0].label, during.at(-1).label, during.length], ['Janvier 2026', 'Décembre 2026', 12])
+    assert.deepEqual([after[0].label, after.at(-1).label], ['Janvier 2027', 'Décembre 2027'])
+    assert.deepEqual(splitByYear(months, 2027).before.map(m => m.label), during.map(m => m.label))
+  })
+})
+
+describe('les années d’un bouton « Afficher »', () => {
+  const months = years => years.map(year => ({ year }))
+
+  test('une année, deux, ou davantage', () => {
+    assert.equal(yearsLabel(months([2027, 2027])), '2027')
+    assert.equal(yearsLabel(months([2024, 2025])), '2024 et 2025')
+    assert.equal(yearsLabel(months([2023, 2024, 2025])), '2023, 2024 et 2025')
   })
 })

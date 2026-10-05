@@ -134,6 +134,8 @@ adresse de retour (ou `:3000` pour le serveur seul et Docker).
   session, même celle du compte fictif.
 - **Les icônes PNG** (Android, iPhone) se tirent du SVG avec
   `node scripts/generate-icons.mjs`, seulement quand l'icône change.
+- **La version** affichée en pied de page est celle de `package.json`. La
+  monter à chaque mise en prod : `npm version 2.2.0 --no-git-tag-version`.
 
 ## Sortie de Supabase
 

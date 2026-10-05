@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, getCurrentUser } from '../api'
+import AppFooter from '../components/AppFooter.vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import SegmentedControl from '../components/SegmentedControl.vue'
@@ -359,6 +360,7 @@ async function deleteAccount() {
         </div>
       </section>
     </template>
+    <AppFooter />
   </main>
 </template>
 

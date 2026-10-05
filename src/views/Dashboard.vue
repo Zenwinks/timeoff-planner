@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import AppFooter from '../components/AppFooter.vue'
 import AppHeader from '../components/AppHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import EntrySheet from '../components/EntrySheet.vue'
@@ -14,7 +15,7 @@ import YearCalendar from '../components/YearCalendar.vue'
 import { getWorkingDaysInRange, useBalance } from '../composables/useBalance'
 import { showToast } from '../composables/useToasts'
 import { statusLabels } from '../constants'
-import { mergeRecaps, nextPeriod, pendingDays, periodOf, periodsOf, summaryMonths, today as todayOf } from '../dashboard'
+import { mergeRecaps, nextPeriod, pendingDays, periodOf, periodsOf, splitByYear, summaryMonths, today as todayOf, yearsLabel } from '../dashboard'
 import { formatDays, formatPeriod } from '../format'
 import { setSolidarite } from '../holidays'
 
@@ -72,10 +73,15 @@ const modeHint = computed(() => {
     : 'Seuls les congés acceptés ou imposés sont décomptés.'
 })
 
-// ── Les mois : les passés repliés, le mois en cours en tête ──
-const showPast = ref(false)
-const pastMonths = computed(() => months.value.filter(m => m.isPast))
-const visibleMonths = computed(() => (showPast.value ? months.value : months.value.filter(m => !m.isPast)))
+// ── Les mois : l'année en cours en entier, les autres années repliées ──
+const byYear = computed(() => splitByYear(months.value, Number(today.slice(0, 4))))
+const showBefore = ref(false)
+const showAfter = ref(false)
+const visibleMonths = computed(() => [
+  ...(showBefore.value ? byYear.value.before : []),
+  ...byYear.value.during,
+  ...(showAfter.value ? byYear.value.after : []),
+])
 
 // Le statut mis en avant par la légende : fixé d'un clic, ou survolé à la souris.
 const pinnedStatus = ref(null)
@@ -288,16 +294,26 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
 
         <template v-if="view === 'list'">
           <button
-            v-if="pastMonths.length"
+            v-if="byYear.before.length"
             type="button"
-            class="btn btn-ghost past-toggle"
-            :aria-expanded="showPast ? 'true' : 'false'"
-            @click="showPast = !showPast"
+            class="btn btn-ghost year-toggle"
+            :aria-expanded="showBefore ? 'true' : 'false'"
+            @click="showBefore = !showBefore"
           >
-            <AppIcon :name="showPast ? 'chevron-up' : 'chevron-down'" :size="18" />
-            {{ showPast ? 'Masquer' : 'Afficher' }} les {{ pastMonths.length }} mois passés
+            <AppIcon :name="showBefore ? 'chevron-up' : 'chevron-down'" :size="18" />
+            {{ showBefore ? 'Masquer' : 'Afficher' }} {{ yearsLabel(byYear.before) }}
           </button>
           <MonthList :months="visibleMonths" :mode="mode" :highlighted="highlightedStatus" @open="openGroup" />
+          <button
+            v-if="byYear.after.length"
+            type="button"
+            class="btn btn-ghost year-toggle"
+            :aria-expanded="showAfter ? 'true' : 'false'"
+            @click="showAfter = !showAfter"
+          >
+            <AppIcon :name="showAfter ? 'chevron-up' : 'chevron-down'" :size="18" />
+            {{ showAfter ? 'Masquer' : 'Afficher' }} {{ yearsLabel(byYear.after) }}
+          </button>
         </template>
 
         <template v-else>
@@ -314,6 +330,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
         </template>
       </section>
     </template>
+    <AppFooter />
   </main>
 
   <button v-if="!loading" type="button" class="fab" aria-label="Poser un congé" @click="openNew">
@@ -432,7 +449,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
   text-align: center;
 }
 
-.past-toggle {
+.year-toggle {
   align-self: flex-start;
 }
 

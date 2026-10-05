@@ -1,6 +1,6 @@
 // La refonte, rejouée dans le navigateur : les deux soldes, le statut en un
-// geste, les congés d'un seul tenant, les mois passés repliés, le formulaire et
-// ce qu'il annonce, le thème. Le jeu de démonstration, un lundi 5 octobre 2026.
+// geste, les congés d'un seul tenant, le formulaire et ce qu'il annonce, le
+// thème. Le jeu de démonstration, un lundi 5 octobre 2026.
 
 import { choice, chip, openChip, openDashboard, openNewForm, pickPeriod, sheet } from './app.js'
 import { entriesOf, expect, test } from './fixtures.js'
@@ -49,27 +49,14 @@ test('le statut d’un congé change en un geste', async ({ page, account }) => 
 
 test('un congé à cheval sur deux mois s’ouvre en entier', async ({ page, account }) => {
   await openDashboard(page)
-  await page.getByRole('button', { name: /Afficher les 9 mois passés/ }).click()
   await openChip(page, 'CP du 3 au 14 août')
   await expect(sheet(page).getByRole('heading', { name: 'CP du 27 juillet au 14 août' })).toBeVisible()
   await expect(sheet(page).getByText('15 jours ouvrés')).toBeVisible()
 })
 
-test('les mois passés sont repliés, le mois en cours vient en tête', async ({ page, account }) => {
-  await openDashboard(page)
-  const names = page.locator('.month h3')
-  await expect(names.first()).toHaveText('Octobre 2026')
-  await expect(page.locator('.month.current')).toContainText('Ce mois-ci')
-  await page.getByRole('button', { name: /Afficher les 9 mois passés/ }).click()
-  await expect(names.first()).toHaveText('Janvier 2026')
-  await page.getByRole('button', { name: /Masquer les 9 mois passés/ }).click()
-  await expect(names.first()).toHaveText('Octobre 2026')
-})
-
 test('la légende reste à l’écran en défilant : le statut survolé reste en avant', async ({ page, account, isMobile }) => {
   test.skip(isMobile, 'pas de survol au doigt : un toucher fixe le statut')
   await openDashboard(page)
-  await page.getByRole('button', { name: /Afficher les 9 mois passés/ }).click()
   const accepted = page.getByRole('group', { name: 'Mettre un statut en avant' }).getByRole('button', { name: 'Accepté' })
   await accepted.hover()
   await expect(page.locator('.chip.dimmed').first()).toBeVisible()

@@ -32,6 +32,25 @@ function balances(row) {
 }
 
 /**
+ * Les mois du récap autour de l'année en cours : ceux des années d'avant, ceux
+ * de l'année, ceux des années d'après. L'année en cours s'affiche en entier, les
+ * autres se déplient à la demande.
+ */
+export function splitByYear(months, year) {
+  return {
+    before: months.filter(m => m.year < year),
+    during: months.filter(m => m.year === year),
+    after: months.filter(m => m.year > year),
+  }
+}
+
+/** Les années de ces mois, pour un bouton : « 2027 », « 2024 et 2025 ». */
+export function yearsLabel(months) {
+  const years = [...new Set(months.map(m => m.year))]
+  return years.length > 1 ? `${years.slice(0, -1).join(', ')} et ${years.at(-1)}` : String(years[0] ?? '')
+}
+
+/**
  * Les congés d'un seul tenant : des jours ouvrés qui se suivent, de même type,
  * statut et durée, d'un mois sur l'autre. Une puce du récap n'en montre que la
  * part d'un mois ; la période entière est ce qu'on modifie ou supprime.
