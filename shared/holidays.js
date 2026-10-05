@@ -67,6 +67,16 @@ export function getFrenchHolidaysMap(year) {
 }
 
 /**
+ * La journée de solidarité que travaille un compte, d'après ses paramètres :
+ * aucune quand, au forfait jours, elle est retirée des RTT au lieu d'être
+ * travaillée (ce jour-là reste alors chômé, comme les autres fériés).
+ */
+export function workedSolidarityDay(settings) {
+  if (!settings) return null
+  return settings.contrat === 'forfait_jours' && settings.solidarite_rtt ? null : settings.journee_solidarite ?? null
+}
+
+/**
  * Le test « ce jour (AAAA-MM-JJ) est-il férié ? » pour un compte : sa journée
  * de solidarité, travaillée, n'en est pas un.
  */

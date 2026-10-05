@@ -16,13 +16,16 @@ export const DEMO_SETTINGS = {
 
 export const DEMO_YEARLY_RTT = [[2026, 10], [2027, 9]]
 
-// Vacances d'hiver, ponts, demi-journées, été, Noël : tous les types et statuts.
+// Vacances d'hiver, ponts, demi-journées, un arrêt maladie, été, Noël : tous les
+// types et statuts.
 export const DEMO_PERIODS = [
   ['2026-02-16', '2026-02-20', 'conge', 'accepte', 1],
   ['2026-03-06', '2026-03-06', 'rtt', 'accepte', 1],
   ['2026-03-13', '2026-03-13', 'conge', 'accepte', 0.5],
   ['2026-04-07', '2026-04-10', 'conge', 'accepte', 1],
   ['2026-05-15', '2026-05-15', 'rtt', 'impose', 1],
+  // Un arrêt maladie : ni CP ni RTT, et pas de demande à suivre.
+  ['2026-06-08', '2026-06-10', 'maladie', 'accepte', 1],
   ['2026-07-27', '2026-08-14', 'conge', 'accepte', 1],
   ['2026-09-18', '2026-09-18', 'rtt', 'accepte', 1],
   ['2026-10-30', '2026-10-30', 'rtt', 'demande', 1],

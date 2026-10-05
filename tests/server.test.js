@@ -166,7 +166,9 @@ describe('le portier et les fichiers', () => {
     for (const entry of [
       { ...day, date: '2026-02-30' },
       { ...day, date: '02/03/2026' },
-      { ...day, type: 'maladie' },
+      { ...day, type: 'sans-solde' },
+      { ...day, type: 'maladie', status: 'demande' },
+      { ...day, type: 'maladie', duration: 0.5 },
       { ...day, status: 'not_requested' },
       { ...day, duration: 2 },
       { ...day, duration: '1' },
@@ -303,6 +305,39 @@ describe('le portier et les fichiers', () => {
       ids: [morning.json[0].id], entries: [{ date: '2026-12-14', type: 'rtt', status: 'demande', duration: 0.5, half_day: 'apres-midi' }],
     } })
     assert.deepEqual(replaced.json.map(e => [e.date, e.status, e.half_day]), [['2026-12-14', 'demande', 'apres-midi']])
+  })
+
+  test('un arrêt maladie se pose en journées entières, sans demande à suivre', async () => {
+    const days = ['2026-11-16', '2026-11-17'].map(date => ({ date, type: 'maladie', status: 'accepte', duration: 1 }))
+    const res = await t.request('POST', '/api/entries', { cookie, body: { entries: days } })
+    assert.equal(res.status, 201)
+    assert.deepEqual(res.json.map(e => [e.date, e.type, e.status, e.duration, e.half_day]),
+      [['2026-11-16', 'maladie', 'accepte', 1, null], ['2026-11-17', 'maladie', 'accepte', 1, null]])
+  })
+
+  test('les réglages du contrat s’enregistrent, et restent quand une ancienne version les omet', async () => {
+    const settings = { start_year: 2026, initial_conges: 25, initial_rtt: 0, conges_increment_per_month: 2.08, journee_solidarite: 'lundi_pentecote' }
+    const put = body => t.request('PUT', '/api/settings', { cookie, body })
+    const contract = async () => {
+      const s = (await t.request('GET', '/api/settings', { cookie })).json
+      return [s.contrat, s.forfait_jours, s.rtt_mode, s.solidarite_rtt]
+    }
+
+    await put(settings)
+    assert.deepEqual(await contract(), ['horaire', null, 'annuel', false], 'les défauts')
+    const saved = await put({ ...settings, contrat: 'forfait_jours', forfait_jours: 218, rtt_mode: 'mensuel', solidarite_rtt: true })
+    assert.equal(saved.status, 200)
+    assert.deepEqual([saved.json.contrat, saved.json.forfait_jours, saved.json.rtt_mode, saved.json.solidarite_rtt], ['forfait_jours', 218, 'mensuel', true])
+    await put({ ...settings, initial_conges: 20 })
+    assert.deepEqual(await contract(), ['forfait_jours', 218, 'mensuel', true], 'absents, ils ne bougent pas')
+    await put({ ...settings, contrat: 'horaire', forfait_jours: null, rtt_mode: 'aucun', solidarite_rtt: false })
+    assert.deepEqual(await contract(), ['horaire', null, 'aucun', false])
+
+    for (const wrong of [{ contrat: 'cadre' }, { forfait_jours: 0 }, { forfait_jours: 218.5 }, { forfait_jours: '218' },
+      { rtt_mode: 'trimestriel' }, { solidarite_rtt: 1 }]) {
+      assert.equal((await put({ ...settings, ...wrong })).status, 400, JSON.stringify(wrong))
+    }
+    assert.deepEqual(await contract(), ['horaire', null, 'aucun', false], 'un refus ne change rien')
   })
 
   test('changer le statut d’un congé, tous ses jours d’un coup', async () => {

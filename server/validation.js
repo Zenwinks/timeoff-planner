@@ -31,6 +31,11 @@ function oneOf(value, name, allowed) {
   return value
 }
 
+function boolean(value, name) {
+  if (typeof value !== 'boolean') throw bad(`« ${name} » doit valoir true ou false.`)
+  return value
+}
+
 /** Une vraie date du calendrier, au format AAAA-MM-JJ. */
 function day(value, name) {
   const match = typeof value === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -42,9 +47,12 @@ function day(value, name) {
 /**
  * Les paramètres, et en option la liste complète des RTT par année
  * (`yearly_rtt`) : elle remplace alors celle du compte, d'un seul coup.
+ * Les réglages du contrat, venus plus tard, sont facultatifs : absents (une
+ * version de l'app d'avant eux), le compte garde les siens (`undefined`).
  */
 export function settingsInput(body) {
-  const s = fields(body, ['start_year', 'initial_conges', 'initial_rtt', 'conges_increment_per_month', 'journee_solidarite'], 'Paramètres', ['yearly_rtt'])
+  const s = fields(body, ['start_year', 'initial_conges', 'initial_rtt', 'conges_increment_per_month', 'journee_solidarite'], 'Paramètres',
+    ['yearly_rtt', ...CONTRACT_FIELDS])
   if (s.journee_solidarite !== null && !(typeof s.journee_solidarite === 'string' && /^[a-z0-9_]{1,40}$/.test(s.journee_solidarite))) {
     throw bad('« journee_solidarite » doit être un jour férié, ou null.')
   }
@@ -61,8 +69,23 @@ export function settingsInput(body) {
       initial_rtt: number(s.initial_rtt, 'initial_rtt', { min: -1000, max: 1000 }),
       conges_increment_per_month: number(s.conges_increment_per_month, 'conges_increment_per_month', { min: -1000, max: 1000 }),
       journee_solidarite: s.journee_solidarite,
+      ...contractInput(s),
     },
     yearlyRtt,
+  }
+}
+
+const CONTRACT_FIELDS = ['contrat', 'forfait_jours', 'rtt_mode', 'solidarite_rtt']
+
+function contractInput(s) {
+  const given = name => name in s
+  return {
+    contrat: given('contrat') ? oneOf(s.contrat, 'contrat', ['horaire', 'forfait_jours']) : undefined,
+    forfait_jours: !given('forfait_jours') ? undefined
+      : s.forfait_jours === null ? null
+        : number(s.forfait_jours, 'forfait_jours', { min: 1, max: 366, integer: true }),
+    rtt_mode: given('rtt_mode') ? oneOf(s.rtt_mode, 'rtt_mode', ['annuel', 'mensuel', 'aucun']) : undefined,
+    solidarite_rtt: given('solidarite_rtt') ? boolean(s.solidarite_rtt, 'solidarite_rtt') : undefined,
   }
 }
 
@@ -92,13 +115,13 @@ export function entriesInput(body) {
     if (halfDay !== null && (duration !== 0.5 || !['matin', 'apres-midi'].includes(halfDay))) {
       throw bad('« half_day » vaut matin ou apres-midi, et seulement pour une demi-journée.')
     }
-    return {
-      date: day(e.date, 'date'),
-      type: oneOf(e.type, 'type', ['conge', 'rtt']),
-      status: oneOf(e.status, 'status', ['brouillon', 'demande', 'accepte', 'impose']),
-      duration,
-      half_day: halfDay,
+    const type = oneOf(e.type, 'type', ['conge', 'rtt', 'maladie'])
+    const status = oneOf(e.status, 'status', ['brouillon', 'demande', 'accepte', 'impose'])
+    // Un arrêt maladie : des journées entières, sans demande à suivre.
+    if (type === 'maladie' && (duration !== 1 || status !== 'accepte')) {
+      throw bad('Un arrêt maladie se pose en journées entières, au statut « accepte ».')
     }
+    return { date: day(e.date, 'date'), type, status, duration, half_day: halfDay }
   })
 }
 

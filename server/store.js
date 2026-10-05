@@ -17,6 +17,14 @@ import { HttpError } from './http.js'
 
 const now = () => new Date().toISOString()
 
+// Les réglages du contrat d'un compte qui n'en a encore enregistré aucun.
+const CONTRACT_DEFAULTS = { contrat: 'horaire', forfait_jours: null, rtt_mode: 'annuel', solidarite_rtt: false }
+
+/** Une ligne de user_settings telle que la sert l'API : solidarite_rtt en booléen. */
+function settingsRow(row) {
+  return row && { ...row, solidarite_rtt: row.solidarite_rtt === 1 }
+}
+
 function isUniqueViolation(error) {
   return error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY'
 }
@@ -38,14 +46,20 @@ export function createStore(db) {
 
     settings: db.prepare('select * from user_settings where user_id = ?'),
     upsertSettings: db.prepare(`insert into user_settings
-        (id, user_id, start_year, initial_conges, initial_rtt, conges_increment_per_month, created_at, updated_at, journee_solidarite)
-      values (@id, @user_id, @start_year, @initial_conges, @initial_rtt, @conges_increment_per_month, @now, @now, @journee_solidarite)
+        (id, user_id, start_year, initial_conges, initial_rtt, conges_increment_per_month, created_at, updated_at, journee_solidarite,
+         contrat, forfait_jours, rtt_mode, solidarite_rtt)
+      values (@id, @user_id, @start_year, @initial_conges, @initial_rtt, @conges_increment_per_month, @now, @now, @journee_solidarite,
+         @contrat, @forfait_jours, @rtt_mode, @solidarite_rtt)
       on conflict (user_id) do update set
         start_year = excluded.start_year,
         initial_conges = excluded.initial_conges,
         initial_rtt = excluded.initial_rtt,
         conges_increment_per_month = excluded.conges_increment_per_month,
         journee_solidarite = excluded.journee_solidarite,
+        contrat = excluded.contrat,
+        forfait_jours = excluded.forfait_jours,
+        rtt_mode = excluded.rtt_mode,
+        solidarite_rtt = excluded.solidarite_rtt,
         updated_at = excluded.updated_at`),
 
     yearlyRtt: db.prepare('select * from yearly_rtt where user_id = ? order by year'),
@@ -137,7 +151,7 @@ export function createStore(db) {
 
     // ── Paramètres ─────────────────────────────────────────────────────────
     getSettings(userId) {
-      return sql.settings.get(userId) ?? null
+      return settingsRow(sql.settings.get(userId)) ?? null
     },
     /**
      * Crée ou remplace les paramètres du compte et, si `yearlyRtt` est donnée,
@@ -146,12 +160,15 @@ export function createStore(db) {
     putSettings(userId, settings, yearlyRtt) {
       return db.transaction(() => {
         const at = now()
-        sql.upsertSettings.run({ ...settings, id: randomUUID(), user_id: userId, now: at })
+        // Un réglage du contrat absent (`undefined`) garde la valeur du compte, ou son défaut.
+        const current = settingsRow(sql.settings.get(userId)) ?? CONTRACT_DEFAULTS
+        const kept = Object.fromEntries(Object.keys(CONTRACT_DEFAULTS).map(k => [k, settings[k] === undefined ? current[k] : settings[k]]))
+        sql.upsertSettings.run({ ...settings, ...kept, solidarite_rtt: kept.solidarite_rtt ? 1 : 0, id: randomUUID(), user_id: userId, now: at })
         if (yearlyRtt) {
           for (const { year, rtt_count } of yearlyRtt) sql.upsertYearlyRtt.run(randomUUID(), userId, year, rtt_count, at)
           sql.deleteOtherYearlyRtt.run(userId, JSON.stringify(yearlyRtt.map(r => r.year)))
         }
-        return sql.settings.get(userId)
+        return settingsRow(sql.settings.get(userId))
       }).immediate()
     },
 

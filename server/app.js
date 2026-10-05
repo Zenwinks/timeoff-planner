@@ -10,6 +10,7 @@
 //   seul (server/store.js).
 
 import { createHash, randomBytes } from 'node:crypto'
+import { workedSolidarityDay } from '../shared/holidays.js'
 import { createAuth, createGoogleOidc } from './auth.js'
 import { HttpError, readJson, sendJson, sendNoContent } from './http.js'
 import { buildCalendar } from './ics.js'
@@ -51,7 +52,7 @@ export function createApp({ config, db, oidc = createGoogleOidc(config) }) {
   function sendCalendar(res, userId, disposition) {
     const body = buildCalendar({
       entries: store.listEntries(userId),
-      solidarityKey: store.getSettings(userId)?.journee_solidarite ?? null,
+      solidarityKey: workedSolidarityDay(store.getSettings(userId)),
       host: new URL(config.origin).host,
     })
     res.writeHead(200, {

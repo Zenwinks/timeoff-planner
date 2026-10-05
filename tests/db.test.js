@@ -1,5 +1,5 @@
-// Les migrations : la copie de la base avant d'en changer la structure, et la
-// migration 0002 sur une base qui a déjà des données.
+// Les migrations : la copie de la base avant d'en changer la structure, et les
+// migrations 0002 et 0003 sur une base qui a déjà des données.
 
 import assert from 'node:assert/strict'
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
@@ -76,6 +76,35 @@ describe('les migrations', () => {
 
     db.prepare("update time_off_entries set half_day = 'apres-midi' where id = 'e2'").run()
     assert.throws(() => db.prepare("update time_off_entries set half_day = 'soir' where id = 'e2'").run(), /CHECK/)
+    db.close()
+  })
+
+  test('la migration 0003 garde jours posés et paramètres, et admet les arrêts maladie', () => {
+    const db = openDb(':memory:')
+    migrate(db, migrations('jusqu-a-0002', ['0001_schema-initial.sql', '0002_demi-journees-et-agenda.sql']))
+    db.prepare("insert into users (id, google_sub, email, created_at) values ('u1', 'sub-1', 'a@example.test', '2026-10-03')").run()
+    db.prepare(`insert into user_settings (id, user_id, start_year, initial_conges, initial_rtt, conges_increment_per_month, journee_solidarite)
+      values ('s1', 'u1', 2026, 25, 0.5, 2.08, 'lundi_pentecote')`).run()
+    const day = (id, date, type, duration, half) => db.prepare(`insert into time_off_entries (id, user_id, date, type, status, created_at, updated_at, duration, half_day)
+      values (?, 'u1', ?, ?, 'accepte', '2026-10-03', '2026-10-03', ?, ?)`).run(id, date, type, duration, half)
+    day('e1', '2026-10-05', 'conge', 1, null)
+    day('e2', '2026-10-06', 'rtt', 0.5, 'matin')
+    const entries = () => db.prepare('select * from time_off_entries order by id').all()
+    const before = { entries: entries(), settings: db.prepare('select * from user_settings').get() }
+
+    migrate(db, migrationsDir)
+    assert.deepEqual(entries(), before.entries)
+    assert.deepEqual(db.prepare('select * from user_settings').get(),
+      { ...before.settings, contrat: 'horaire', forfait_jours: null, rtt_mode: 'annuel', solidarite_rtt: 0 })
+
+    day('e3', '2026-10-07', 'maladie', 1, null)
+    assert.throws(() => day('e4', '2026-10-08', 'sans-solde', 1, null), /CHECK/)
+    assert.throws(() => day('e5', '2026-10-06', 'conge', 1, null), /UNIQUE/, 'toujours une date par compte')
+    assert.throws(() => db.prepare("update time_off_entries set half_day = 'soir' where id = 'e2'").run(), /CHECK/)
+    assert.throws(() => db.prepare("update user_settings set rtt_mode = 'trimestriel'").run(), /CHECK/)
+    assert.deepEqual(db.pragma('foreign_key_check'), [])
+    db.prepare("delete from users where id = 'u1'").run()
+    assert.equal(db.prepare('select count(*) from time_off_entries').pluck().get(), 0, 'le compte supprimé emporte toujours ses jours')
     db.close()
   })
 })

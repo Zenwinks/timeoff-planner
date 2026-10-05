@@ -13,6 +13,9 @@ const TABLES = [
   ['public.time_off_entries', 'time_off_entries'],
 ]
 
+// Les colonnes ajoutées après Supabase dont le défaut n'est pas null.
+const LATER_DEFAULTS = { contrat: 'horaire', rtt_mode: 'annuel', solidarite_rtt: false }
+
 /**
  * Les écarts entre la base `db` (better-sqlite3) et la sauvegarde : sa
  * référence (reference.json) et ses exports (readTables). Vide : identiques.
@@ -51,10 +54,11 @@ export function verifyAgainstBackup(db, reference, exported) {
     if (rows.length !== expected.size) problems.push(`${name} : ${rows.length} lignes servies, ${expected.size} exportées`)
     for (const row of rows) {
       const exportedRow = expected.get(row.id)
-      // Une colonne venue après Supabase (half_day…) : vide sur une ligne reprise.
+      // Une colonne venue après Supabase (half_day, forfait_jours…) : à sa valeur
+      // par défaut sur une ligne reprise.
       const later = Object.keys(row).filter(k => exportedRow && !(k in exportedRow))
       const kept = Object.fromEntries(Object.entries(row).filter(([k]) => !later.includes(k)))
-      if (!isDeepStrictEqual(kept, exportedRow) || later.some(k => row[k] !== null)) {
+      if (!isDeepStrictEqual(kept, exportedRow) || later.some(k => row[k] !== (LATER_DEFAULTS[k] ?? null))) {
         problems.push(`${name} ${row.id} : ${JSON.stringify(row)} ≠ ${JSON.stringify(exportedRow ?? null)}`)
       }
     }

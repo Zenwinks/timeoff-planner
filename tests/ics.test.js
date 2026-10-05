@@ -49,6 +49,13 @@ describe('l’export vers l’agenda', () => {
     assert.match(event('20260515'), /STATUS:CONFIRMED/)
   })
 
+  test('un arrêt maladie n’y est qu’une absence, sans statut', () => {
+    assert.match(event('20260608'), /SUMMARY:Absence\r\n/)
+    assert.match(event('20260608'), /DESCRIPTION:Absence\\, 3 jours ouvrés\. Depuis/)
+    assert.match(event('20260608'), /STATUS:CONFIRMED/)
+    assert.doesNotMatch(ics, /maladie/i)
+  })
+
   test('une demi-journée dit son moment, ou qu’il n’est pas précisé', () => {
     assert.match(event('20261113'), /SUMMARY:RTT · après-midi \(brouillon\)/)
     assert.match(event('20260313'), /SUMMARY:CP · demi-journée \(accepté\)/)
