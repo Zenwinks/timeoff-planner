@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, getCurrentUser } from '../api'
 import AppFooter from '../components/AppFooter.vue'
@@ -99,6 +99,12 @@ function setForfaitRtt(year, value) {
 function resetForfaitRtt(year) {
   yearlyRtt.value = yearlyRtt.value.filter(r => r.year !== year)
 }
+
+// L'année proposée à l'ajout suit la dernière saisie dès qu'elle est déjà
+// prise : de retour du forfait, par exemple, avec ses années calculées.
+watch(yearlyRtt, rows => {
+  if (rows.some(r => r.year === newRttYear.value)) newRttYear.value = Math.max(...rows.map(r => r.year)) + 1
+})
 
 const newRttYearError = computed(() => {
   if (newRttYear.value < form.value.start_year) return `L'année doit être ≥ ${form.value.start_year}`

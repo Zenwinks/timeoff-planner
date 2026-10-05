@@ -69,6 +69,18 @@ test('sans RTT, l’app ne montre que les CP', async ({ page, account }) => {
   await expect(choice(page, 'Type', 'Arrêt maladie')).toBeVisible()
 })
 
+test('revenu à l’horaire, on garde les RTT du forfait, et l’ajout propose l’année d’après', async ({ page, account }) => {
+  await openSettings(page)
+  await group(page, 'Type de contrat').getByRole('button', { name: 'Forfait jours' }).click()
+  await saveSettings(page)
+  await openSettings(page)
+  await group(page, 'Type de contrat').getByRole('button', { name: 'Horaire' }).click()
+  await expect(page.getByLabel('RTT 2026', { exact: true })).toHaveValue('10')
+  await expect(page.getByLabel('RTT 2027', { exact: true })).toHaveValue('12')
+  await expect(page.getByLabel('Nouvelle année', { exact: true })).toHaveValue('2028')
+  await expect(page.getByText('Cette année est déjà configurée')).toHaveCount(0)
+})
+
 test('au forfait jours, les RTT se calculent, et la journée de solidarité peut être retirée des RTT', async ({ page, account }) => {
   await openSettings(page)
   await group(page, 'Type de contrat').getByRole('button', { name: 'Forfait jours' }).click()
