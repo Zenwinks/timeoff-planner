@@ -1,12 +1,15 @@
-// Le contrat (src/contract.js) et ce qu'il change aux soldes : le forfait jours
-// et ses RTT, la journée de solidarité retirée des RTT, les RTT au fil des mois.
+// Le contrat (src/contract.js) et ce qu'il change aux soldes : les CP par
+// douzièmes, le forfait jours et ses RTT, la journée de solidarité retirée des
+// RTT, les RTT au fil des mois et ceux posés d'avance.
 
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
+import { ref } from 'vue'
 import { DEMO_SETTINGS, DEMO_YEARLY_RTT } from '../scripts/lib/demo.mjs'
-import { buildMonthlyRecap } from '../src/composables/useBalance.js'
+import { buildMonthlyRecap, fromPayslip, useBalance } from '../src/composables/useBalance.js'
 import { cpPerYear, effectiveYearlyRtt, forfaitRtt, hasRtt, isForfait, workedDays, workingDaysOf } from '../src/contract.js'
-import { holidayChecker } from '../shared/holidays.js'
+import { setSolidarite } from '../src/holidays.js'
+import { holidayChecker, workedSolidarityDay } from '../shared/holidays.js'
 
 const NOW = new Date(2026, 9, 5, 12)
 const yearlyRtt = DEMO_YEARLY_RTT.map(([year, rtt_count]) => ({ year, rtt_count }))
@@ -72,5 +75,43 @@ describe('les RTT au fil des mois', () => {
     const monthly = recap({ ...DEMO_SETTINGS, initial_rtt: 0, rtt_mode: 'mensuel' })
     assert.equal(rttAt(monthly, 2026, 12), 10)
     assert.equal(rttAt(monthly, 2027, 1), 0.75)
+  })
+
+  test('posés d’avance, ils passent sous -1 en cours d’année : seul le 31 décembre bloque', () => {
+    // Au forfait, la journée de solidarité retirée des RTT : 9 en 2026, 0,75 par mois.
+    const settings = { ...forfait, solidarite_rtt: true, rtt_mode: 'mensuel', initial_rtt: 0.32 }
+    setSolidarite(workedSolidarityDay(settings))
+    const rtt = (from, to) => [new Date(`${from}T00:00`), new Date(`${to}T00:00`)]
+    // Huit déjà posés en mars et en avril : fin avril, 0,32 + 4 × 0,75 − 8 = -4,68.
+    const taken = ['2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05', '2026-04-13', '2026-04-14', '2026-04-15', '2026-04-16']
+      .map(date => ({ id: date, date, type: 'rtt', duration: 1, status: 'accepte' }))
+    const { checkNegativeBalance } = useBalance(ref(settings), ref([]), ref(taken))
+
+    // Un de plus : l'année finit à 0,32 + 9 − 9 = 0,32, rien à redire.
+    assert.deepEqual(checkNegativeBalance(rtt('2026-05-04', '2026-05-04'), 'rtt', 1, 'accepte'), { messages: [], blocking: false })
+    // Deux : -0,68 au 31 décembre, une alerte. Trois : -1,68, c'est non.
+    assert.deepEqual(checkNegativeBalance(rtt('2026-05-04', '2026-05-05'), 'rtt', 1, 'accepte'),
+      { messages: ['RTT en négatif au 31 décembre 2026 (-0,68)'], blocking: false })
+    assert.deepEqual(checkNegativeBalance(rtt('2026-05-04', '2026-05-06'), 'rtt', 1, 'accepte'),
+      { messages: ['RTT : au 31 décembre 2026, le solde ne peut pas descendre sous -1 ; il serait de -1,68'], blocking: true })
+  })
+})
+
+describe('les CP, par douzièmes', () => {
+  test('25 par an : 8,33 au bout de quatre mois, 25 tout juste en décembre, comme sur la fiche de paie', () => {
+    const settings = { ...DEMO_SETTINGS, initial_conges: 0 }
+    const rows = buildMonthlyRecap(settings, yearlyRtt, [], NOW)
+    const cpAt = month => rows.find(r => r.year === 2026 && r.month === month).cp
+    assert.deepEqual([cpAt(4), cpAt(12)], [8.33, 25])
+    assert.equal(cpPerYear(settings), 25)
+  })
+
+  test('un solde lu sur la fiche de paie, arrondi au centième, retrouve ses douzièmes', () => {
+    // 3,58 sur la fiche de paie, c'est 3 + 7/12 : fin avril, 43/12 + 4 × 25/12 = 11,9167, et non 11,9133.
+    const rows = buildMonthlyRecap({ ...DEMO_SETTINGS, initial_conges: 3.58 }, yearlyRtt, [], NOW)
+    assert.equal(rows.find(r => r.year === 2026 && r.month === 4).cp, 11.92)
+    assert.equal(fromPayslip(3.58, 25 / 12), 43 / 12)
+    // Ce qui n'est l'arrondi d'aucun douzième reste tel quel, et sans un nombre entier de CP par an, tout reste tel quel.
+    assert.deepEqual([fromPayslip(5.6, 25 / 12), fromPayslip(11.59, 25 / 12), fromPayslip(3.58, 2.1)], [5.6, 11.59, 3.58])
   })
 })

@@ -10,7 +10,7 @@ export const DEMO_SETTINGS = {
   start_year: 2026,
   initial_conges: 11.59,
   initial_rtt: 0.32,
-  conges_increment_per_month: 2.08,
+  conges_increment_per_month: 25 / 12,
   journee_solidarite: 'lundi_pentecote',
 }
 

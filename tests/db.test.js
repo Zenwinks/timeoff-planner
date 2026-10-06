@@ -1,5 +1,5 @@
 // Les migrations : la copie de la base avant d'en changer la structure, et les
-// migrations 0002 et 0003 sur une base qui a déjà des données.
+// migrations 0002, 0003 et 0004 sur une base qui a déjà des données.
 
 import assert from 'node:assert/strict'
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
@@ -92,7 +92,7 @@ describe('les migrations', () => {
     const entries = () => db.prepare('select * from time_off_entries order by id').all()
     const before = { entries: entries(), settings: db.prepare('select * from user_settings').get() }
 
-    migrate(db, migrationsDir)
+    migrate(db, migrations('jusqu-a-0003', ['0001_schema-initial.sql', '0002_demi-journees-et-agenda.sql', '0003_rtt-forfait-et-arrets-maladie.sql']))
     assert.deepEqual(entries(), before.entries)
     assert.deepEqual(db.prepare('select * from user_settings').get(),
       { ...before.settings, contrat: 'horaire', forfait_jours: null, rtt_mode: 'annuel', solidarite_rtt: 0 })
@@ -105,6 +105,24 @@ describe('les migrations', () => {
     assert.deepEqual(db.pragma('foreign_key_check'), [])
     db.prepare("delete from users where id = 'u1'").run()
     assert.equal(db.prepare('select count(*) from time_off_entries').pluck().get(), 0, 'le compte supprimé emporte toujours ses jours')
+    db.close()
+  })
+
+  test('la migration 0004 passe à 25 CP par an tout juste les comptes à 2,08, et seulement eux', () => {
+    const db = openDb(':memory:')
+    migrate(db, migrations('avant-0004', ['0001_schema-initial.sql', '0002_demi-journees-et-agenda.sql', '0003_rtt-forfait-et-arrets-maladie.sql']))
+    const account = (id, perMonth) => {
+      db.prepare("insert into users (id, google_sub, email, created_at) values (?, ?, ?, '2026-10-06')").run(id, `sub-${id}`, `${id}@example.test`)
+      db.prepare(`insert into user_settings (id, user_id, start_year, initial_conges, initial_rtt, conges_increment_per_month, journee_solidarite)
+        values (?, ?, 2026, 10, 0, ?, null)`).run(`s-${id}`, id, perMonth)
+    }
+    account('u1', 2.08)
+    account('u2', 2.5)
+
+    migrate(db, migrationsDir)
+    const perMonth = id => db.prepare('select conges_increment_per_month from user_settings where user_id = ?').pluck().get(id)
+    assert.equal(perMonth('u1'), 25 / 12)
+    assert.equal(perMonth('u2'), 2.5)
     db.close()
   })
 })

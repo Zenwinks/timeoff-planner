@@ -20,7 +20,7 @@ async function saveSettings(page) {
 
 test('un arrêt maladie se pose sans statut ni durée, et ne touche à aucun solde', async ({ page, account }) => {
   await openDashboard(page)
-  await expect(card(page, 'Fin 2026').locator('.balance.cp')).toContainText('4,05')
+  await expect(card(page, 'Fin 2026').locator('.balance.cp')).toContainText('4,09')
   await openNewForm(page)
   await pickPeriod(page, '2026-10-12', '2026-10-14')
   await choice(page, 'Type', 'Arrêt maladie').click()
@@ -29,7 +29,7 @@ test('un arrêt maladie se pose sans statut ni durée, et ne touche à aucun sol
   await sheet(page).getByRole('button', { name: /^Poser 3 jours/ }).click()
 
   await expect(chip(page, 'Arrêt maladie du 12 au 14 octobre, 3 jours')).toHaveText(/^3j\s*Maladie\s*du 12 au 14$/)
-  await expect(card(page, 'Fin 2026').locator('.balance.cp')).toContainText('4,05')
+  await expect(card(page, 'Fin 2026').locator('.balance.cp')).toContainText('4,09')
   await expect.poll(async () => (await entriesOf(page)).filter(e => e.type === 'maladie' && e.date.startsWith('2026-10')).map(e => [e.status, e.duration]))
     .toEqual([['accepte', 1], ['accepte', 1], ['accepte', 1]])
 })

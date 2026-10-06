@@ -97,8 +97,8 @@ test('la page est en français, nombres compris', async ({ page, account }) => {
   await openDashboard(page)
   await expect(page.locator('html')).toHaveAttribute('lang', 'fr')
   const october = page.locator('.month.current')
-  await expect(october).toContainText('7,89')
-  await expect(october).not.toContainText('7.89')
+  await expect(october).toContainText('7,92')
+  await expect(october).not.toContainText('7.92')
 })
 
 test('si le serveur ne répond pas, l’app le dit et propose de réessayer', async ({ page, account }) => {

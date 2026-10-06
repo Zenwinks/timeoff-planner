@@ -10,13 +10,13 @@ const yearEndCard = page => page.locator('.summary-card').filter({ hasText: 'Fin
 test('le solde confirmé ignore brouillons et demandes, et le choix reste', async ({ page, account }) => {
   await openDashboard(page)
   // Au 31 décembre : 8 jours de CP sont encore en attente (4 demandés, 4 en brouillon).
-  await expect(yearEndCard(page).locator('.balance.cp')).toContainText('4,05')
+  await expect(yearEndCard(page).locator('.balance.cp')).toContainText('4,09')
   await page.getByRole('group', { name: 'Soldes affichés' }).getByRole('button', { name: 'Confirmé' }).click()
-  await expect(yearEndCard(page).locator('.balance.cp')).toContainText('12,05')
+  await expect(yearEndCard(page).locator('.balance.cp')).toContainText('12,09')
   await expect(page.getByText(/Seuls les congés acceptés ou imposés sont décomptés/)).toBeVisible()
 
   await page.reload()
-  await expect(yearEndCard(page).locator('.balance.cp')).toContainText('12,05')
+  await expect(yearEndCard(page).locator('.balance.cp')).toContainText('12,09')
 })
 
 test('en vue Confirmé, ce que le solde ignore passe en gris, dans la liste comme dans le calendrier', async ({ page, account }) => {
@@ -84,8 +84,8 @@ test('le formulaire montre l’effet sur le solde, et les alertes', async ({ pag
   await pickPeriod(page, '2026-10-19', '2026-10-23')
   await expect(sheet(page).getByText('Du 19 au 23 octobre')).toBeVisible()
   await expect(sheet(page).getByText('5 jours ouvrés')).toBeVisible()
-  // « 4,05 → -0,95 » à l'écran ; « 4,05 puis -0,95 » pour les lecteurs d'écran.
-  await expect(sheet(page).locator('.preview')).toContainText(/4,05.*[-−]0,95/)
+  // « 4,09 → -0,91 » à l'écran ; « 4,09 puis -0,91 » pour les lecteurs d'écran.
+  await expect(sheet(page).locator('.preview')).toContainText(/4,09.*[-−]0,91/)
   await expect(sheet(page).getByRole('alert').first()).toContainText('CP en négatif')
   await expect(sheet(page).getByRole('button', { name: 'Poser 5 jours quand même' })).toBeEnabled()
 })

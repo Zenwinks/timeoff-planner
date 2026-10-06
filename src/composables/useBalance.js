@@ -31,16 +31,31 @@ export function groupEntries(entries) {
 // un entier exact en virgule flottante, et le report de janvier en dépend.
 const settle = value => Math.round(value * 1e9) / 1e9
 
+/**
+ * Un solde de CP lu sur une fiche de paie, arrondi au centième : 5,58 pour
+ * 5,5833. Quand l'année compte un nombre entier de CP, acquis par douzièmes, et
+ * qu'ils se posent par demi-journées, tout solde est un nombre de douzièmes : on
+ * retrouve le vrai. Une valeur qui n'est pas l'arrondi d'un douzième reste telle
+ * quelle.
+ */
+export function fromPayslip(balance, perMonth) {
+  const perYear = perMonth * 12
+  if (perYear <= 0 || Math.abs(perYear - Math.round(perYear)) > 1e-9) return balance
+  const twelfths = Math.round(balance * 12) / 12
+  return Math.abs(twelfths - balance) < 0.004 ? twelfths : balance
+}
+
 function computeBalances(settings, yearlyRtt, entries, now = new Date()) {
   const s = settings
   const startYear = Number(s.start_year)
   const startAbs = startYear * 12
   const nowAbs = now.getFullYear() * 12 + now.getMonth()
-  const endAbs = Math.max(startAbs + 23, nowAbs + 12)
+  // Jusqu'en décembre : chaque année va à son terme, et ses RTT se jugent au 31.
+  const endAbs = Math.floor(Math.max(startAbs + 23, nowAbs + 12) / 12) * 12 + 11
 
-  let cpBalance = Number(s.initial_conges) || 0
-  let rttBalance = Number(s.initial_rtt) || 0
   const cpIncrement = Number(s.conges_increment_per_month) || 0
+  let cpBalance = fromPayslip(Number(s.initial_conges) || 0, cpIncrement)
+  let rttBalance = Number(s.initial_rtt) || 0
   // Les RTT de l'année : d'un coup en janvier, ou un douzième chaque mois.
   const monthlyRtt = s.rtt_mode === 'mensuel'
   const rows = []
@@ -176,11 +191,16 @@ export function useBalance(settings, yearlyRtt, allEntries) {
       // « en décembre 2026 » : le mois en minuscule, au fil de la phrase.
       const month = `${monthNames[row.month].toLowerCase()} ${row.year}`
       if (row.cpBalance < 0) warnings.push(`CP en négatif en ${month} (${formatDays(row.cpBalance)})`)
+      // Les RTT se jugent au 31 décembre. Acquis au fil des mois, ceux posés
+      // d'avance font passer le solde sous zéro en cours d'année, comme sur la
+      // fiche de paie ; acquis en janvier, il ne fait que baisser jusqu'en
+      // décembre, et le juger là revient au même.
+      if (row.month !== 11) continue
       if (row.rttBalance <= -1) {
-        warnings.push(`RTT : le solde ne peut pas descendre sous -1, il serait de ${formatDays(row.rttBalance)} en ${month}`)
+        warnings.push(`RTT : au 31 décembre ${row.year}, le solde ne peut pas descendre sous -1 ; il serait de ${formatDays(row.rttBalance)}`)
         blocking = true
       } else if (row.rttBalance < 0) {
-        warnings.push(`RTT en négatif en ${month} (${formatDays(row.rttBalance)})`)
+        warnings.push(`RTT en négatif au 31 décembre ${row.year} (${formatDays(row.rttBalance)})`)
       }
     }
 

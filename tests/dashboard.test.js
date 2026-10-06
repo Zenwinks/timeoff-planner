@@ -30,9 +30,9 @@ describe('le tableau de bord', () => {
     const month = (year, m) => months.find(r => r.year === year && r.month === m)
     // Octobre : le RTT du 30 est demandé, pas encore accepté.
     assert.deepEqual([month(2026, 10).forecast.rtt, month(2026, 10).confirmed.rtt], [6.32, 7.32])
-    assert.deepEqual([month(2026, 10).forecast.cp, month(2026, 10).confirmed.cp], [7.89, 7.89])
+    assert.deepEqual([month(2026, 10).forecast.cp, month(2026, 10).confirmed.cp], [7.92, 7.92])
     // Décembre : 8 jours de CP en attente (4 demandés, 4 en brouillon), 1,5 RTT.
-    assert.deepEqual([month(2026, 12).forecast.cp, month(2026, 12).confirmed.cp], [4.05, 12.05])
+    assert.deepEqual([month(2026, 12).forecast.cp, month(2026, 12).confirmed.cp], [4.09, 12.09])
     assert.deepEqual([month(2026, 12).forecast.rtt, month(2026, 12).confirmed.rtt], [5.82, 7.32])
   })
 

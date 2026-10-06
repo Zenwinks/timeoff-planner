@@ -27,12 +27,24 @@ const form = ref({
   start_year: new Date().getFullYear(),
   initial_conges: 25,
   initial_rtt: 0,
-  conges_increment_per_month: 2.08,
+  conges_increment_per_month: 25 / 12,
   journee_solidarite: null,
   contrat: 'horaire',
   forfait_jours: null,
   rtt_mode: 'annuel',
   solidarite_rtt: false,
+})
+
+// Les CP se saisissent à l'année et s'acquièrent par douzièmes, comme sur la
+// fiche de paie : 25 par an font 25/12 par mois (2,08 en perdait 0,04 par an).
+const cpPerYear = computed({
+  get: () => {
+    const perMonth = form.value.conges_increment_per_month
+    return typeof perMonth === 'number' ? Math.round(perMonth * 12 * 1e6) / 1e6 : perMonth
+  },
+  set: value => {
+    form.value.conges_increment_per_month = typeof value === 'number' ? value / 12 : value
+  },
 })
 
 // Les RTT par année se modifient ici et s'enregistrent avec le reste, d'un seul
@@ -221,7 +233,7 @@ function invalidField() {
     ['Année de départ', form.value.start_year],
     ['Congés initiaux', form.value.initial_conges],
     ['RTT initiaux', form.value.initial_rtt],
-    ['Acquisition par mois', form.value.conges_increment_per_month],
+    ['CP par an', form.value.conges_increment_per_month],
     ...(isForfait.value ? [['Jours à travailler par an', form.value.forfait_jours]] : []),
     ...yearlyRtt.value.map(r => [`RTT ${r.year}`, r.rtt_count]),
   ].find(([, value]) => !isNumber(value))?.[0] ?? null
@@ -337,18 +349,18 @@ async function deleteAccount() {
               <span class="field-hint">Le calcul démarre en janvier de cette année.</span>
             </div>
             <div class="field">
-              <label class="field-label" for="settings-increment">Acquisition par mois</label>
-              <input id="settings-increment" v-model.number="form.conges_increment_per_month" class="input" type="number" step="0.01" min="0" />
-              <span class="field-hint">CP acquis chaque mois. Par défaut 2,08 (25 jours par an).</span>
+              <label class="field-label" for="settings-cp-per-year">CP par an</label>
+              <input id="settings-cp-per-year" v-model.number="cpPerYear" class="input" type="number" step="any" min="0" />
+              <span class="field-hint">25 le plus souvent : l’app en ajoute un douzième chaque mois.</span>
             </div>
             <div class="field">
               <label class="field-label" for="settings-initial-conges">Congés initiaux</label>
-              <input id="settings-initial-conges" v-model.number="form.initial_conges" class="input" type="number" step="0.01" min="0" />
-              <span class="field-hint">Solde CP reporté de l’année précédente.</span>
+              <input id="settings-initial-conges" v-model.number="form.initial_conges" class="input" type="number" step="any" min="0" />
+              <span class="field-hint">Votre solde CP au 1er janvier de l’année de départ, tel qu’il figure sur la fiche de paie de décembre.</span>
             </div>
             <div v-if="hasRtt" class="field">
               <label class="field-label" for="settings-initial-rtt">RTT initiaux</label>
-              <input id="settings-initial-rtt" v-model.number="form.initial_rtt" class="input" type="number" step="0.01" min="0" />
+              <input id="settings-initial-rtt" v-model.number="form.initial_rtt" class="input" type="number" step="any" min="0" />
               <span class="field-hint">Solde RTT reporté : seules les décimales passent d’une année à l’autre.</span>
             </div>
           </div>
