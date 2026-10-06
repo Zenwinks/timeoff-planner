@@ -28,7 +28,7 @@ test('un arrêt maladie se pose sans statut ni durée, et ne touche à aucun sol
   await expect(sheet(page).getByText(/Solde prévisionnel/)).toHaveCount(0)
   await sheet(page).getByRole('button', { name: /^Poser 3 jours/ }).click()
 
-  await expect(chip(page, 'Arrêt maladie du 12 au 14 octobre, 3 jours')).toHaveText(/^Maladie\s*3j\s*du 12 au 14$/)
+  await expect(chip(page, 'Arrêt maladie du 12 au 14 octobre, 3 jours')).toHaveText(/^3j\s*Maladie\s*du 12 au 14$/)
   await expect(card(page, 'Fin 2026').locator('.balance.cp')).toContainText('4,05')
   await expect.poll(async () => (await entriesOf(page)).filter(e => e.type === 'maladie' && e.date.startsWith('2026-10')).map(e => [e.status, e.duration]))
     .toEqual([['accepte', 1], ['accepte', 1], ['accepte', 1]])

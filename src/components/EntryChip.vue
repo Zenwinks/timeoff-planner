@@ -4,11 +4,11 @@ import AppIcon from './AppIcon.vue'
 import { isSickLeave, statusIcons, statusLabels, typeLabels } from '../constants'
 import { formatDays, formatPeriod } from '../format'
 
-// La part d'un congé posée dans un mois : « CP 5j du 27 au 31 », « RTT 1j le
-// 30 », « RTT ½j le 13 après-midi ». La durée d'abord, puis les dates en toutes
-// lettres : un « CP 7 » se lisait comme sept jours de CP. Sa couleur dit le type
-// (CP, RTT ou arrêt maladie), son style et son icône le statut. Un clic ouvre le
-// congé entier.
+// La part d'un congé posée dans un mois, qui se lit comme une phrase : « 5j CP
+// du 27 au 31 », « 1j RTT le 30 », « ½j RTT le 13 après-midi ». Les dates en
+// toutes lettres : un « CP 7 » se lisait comme sept jours de CP. Sa couleur dit
+// le type (CP, RTT ou arrêt maladie), son style et son icône le statut. Un clic
+// ouvre le congé entier.
 const props = defineProps({
   group: { type: Object, required: true },
   dimmed: { type: Boolean, default: false },
@@ -52,9 +52,11 @@ const label = computed(() => {
     @click="emit('open', group)"
   >
     <AppIcon :name="icon" :size="14" />
-    <span class="chip-type">{{ shortType }}</span>
-    <span class="chip-days num">{{ shortDays }}</span>
-    <span class="chip-dates num">{{ dates }}</span>
+    <span class="chip-text">
+      <span class="chip-days num">{{ shortDays }}</span>
+      <span class="chip-type">{{ shortType }}</span>
+      <span class="chip-dates num">{{ dates }}</span>
+    </span>
   </button>
 </template>
 
@@ -141,6 +143,14 @@ const label = computed(() => {
 
 .chip.uncounted.dimmed {
   opacity: 0.2;
+}
+
+/* La phrase sur une même ligne de base : le type, plus petit, ne flotte pas
+   entre la durée et les dates. */
+.chip-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
 }
 
 .chip-type {
